@@ -1,0 +1,215 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+```{r}
+library(pheatmap)
+require(DESeq2)
+library(lattice)
+library(Matrix)
+library(genefilter)
+library(gcrma)
+library(corrplot)
+require(ggplot2)
+library(apeglm)
+library(tidyr)
+library(vsn)
+library(dplyr)
+```
+
+```{r}
+source("./functions_preprocessing.R")
+source("./functions_diffExp.R")
+```
+
+```{r}
+for (dir. in list.dirs("../../data/")){
+  if (grepl("denovo$", dir.) || grepl("REFs$", dir.)){
+    ### Entering potato_denovo expression files (Universidad Nacional)
+    if (grepl("denovo$", dir.)){
+      message("Working with denovo dataset A counts")
+      print(dir.)
+      for (file. in list.files(dir.)){
+        #print(file.)
+        if (grepl("^A_TPM", file.)){
+          #Access to counts A file
+          de.novo.DEGS <- c()
+          print(file.)
+          # ==================== Accessing expression data
+          de.novo.table <- read.delim(paste0(dir.,"/", file.), sep="\t", header=TRUE, na.strings="") %>% select("Row.Labels", starts_with("A")) 
+          
+          # ==================== Rename columns
+          colnames(de.novo.table) <- c("Row.Labels", substr(colnames(de.novo.table[2:dim(de.novo.table)[2]]), 3,  8))
+          print(cat("Dimensions of expression file are = ",dim(de.novo.table)))
+          
+          # ==================== Convert to integer type each column
+          for (column in colnames(de.novo.table[2:dim(de.novo.table)[2]])){
+            de.novo.table[[column]] <- as.integer(round(de.novo.table[[column]]))
+          } 
+          # ================================ FILTERING DATA  =====================================
+          message("Filtering expression data...")
+          # ================================ Expression = 0
+          de.novo.table <- de.novo.table[rowSums(as.matrix(de.novo.table[2:dim(de.novo.table)[2]])) != 0,]
+          print(cat("Dimensions of expression file after expression = 0 filter are =", dim(de.novo.table)))
+          
+          # ================================ Variation = 0
+          de.novo.table <- de.novo.table[0 < apply(de.novo.table[2:dim(de.novo.table)[2]], 1, var), ]
+          print(cat("Dimensions of expression file after expression = 0 filter are =", dim(de.novo.table)))
+          
+          # =============================== DIFFERENTIAL EXPRESSION  ==============================
+          message("Determining differential expression for all conditions...")
+          
+          # ============================== 1.Loading data for de novo dataset accesions
+          accesions.info <- read.csv("../../data/potato_denovo/accesiones.csv")
+          ## Define anthocyanin names
+          anthocyanin.names <- c("Delphinidin","Peonidin","Cyanidin","Total.anthocyanins")
+        
+          ## Get accesion names present in expression data
+          accesion_names <- names(de.novo.table)[2:dim(de.novo.table)[2]]
+          ## Define quantiles to work on
+          quantiles <- seq(30,60,5)
+          #quantiles <- seq(30,60,30)
+          ## Define group of accesions based on level of each anthocyanin (funcion return list)
+          accesions.by.anthocyanin <- get.accessions.by.quantile(anthocyanins.vector=anthocyanin.names,
+                                                                 accesions.dataset=accesions.info,
+                                                                 accessions.vector=accesion_names, 
+                                                                 quantiles.vector=quantiles)
+          #stop("Stopping to determine values of anthocyanin")
+          for (a in names(accesions.by.anthocyanin)){
+            DEGS <- c()
+            message(sprintf("GETTING DEGs FOR CONTRASTS FOR %s", a))
+            for (q in quantiles){
+              message(sprintf("Including QUANTILE %s for contrast", q))
+              below_quantile <- accesions.by.anthocyanin[[a]][[q]][["low.ammount"]]
+              print(sprintf("Below quantile length--> %s", length(below_quantile)))
+              above_quantile <- accesions.by.anthocyanin[[a]][[q]][["high.ammount"]]
+              print(sprintf("Above quantile length --> %s", length(above_quantile)))
+              
+              accessions.contrast <- c(below_quantile,above_quantile)
+              
+              # =========================== Create the clade vector
+              clade.vector <- get.clade.vector(dataset = accesions.info,
+                                               contrast = accessions.contrast,
+                                               mode = "clade")
+              
+              
+              
+              # =========================== Create contrast factor
+              contrast.vector <- get.contrast.vector(accessions.contrast,
+                                                     below_quantile = below_quantile,
+                                                     above_quantile = above_quantile)
+              print(contrast.vector)
+              
+              # =========================== Create coldata
+              colData. <- data.frame(contrast=as.factor(contrast.vector), clado=as.factor(clade.vector))
+              
+              
+              # =========================== Rearrange expression dataframe
+              expression.data <- de.novo.table[, c("Row.Labels", below_quantile, above_quantile)]
+              # =========================== Create Deseq2 object
+              dds0 <- DESeq2::DESeqDataSetFromMatrix(countData = expression.data[2:dim(expression.data)[2]],
+                                                     colData = colData.,
+                                                     design = ~contrast+clado
+              )
+              dds0 <- DESeq2::estimateSizeFactors(dds0)
+              out.factors <- names(sizeFactors(dds0)[sizeFactors(dds0) < 0.3 | sizeFactors(dds0) > 3])
+              message(cat("Outstimated factors are ==> ", out.factors))
+              
+              
+              if (is.null(out.factors)){
+                message("No accession was removed after SizeFactors calculation")
+                dds0 <- DESeq2::DESeq(dds0, test = "LRT", reduced = ~1)
+                res0 <- results(dds0)
+                resultsNames(dds0)
+                # plotDispEsts(dds0)
+                print(resultsNames(dds0))
+                resLFC0 <- DESeq2::lfcShrink(dds0, coef="contrast_1_vs_0", type="apeglm")
+                g_index <- as.numeric(rownames(expresion.data[replace_na(resLFC0$padj < 0.05, FALSE),]))
+                DEGS <- c(DEGS, expresion.data$Row.Labels[as.numeric(rownames(expresion.data)) %in% g_index])
+                de.novo.DEGS <- c(de.novo.DEGS, DEGS)
+                
+                print(sprintf("DEGS = %1$s", DEGS))
+                print(sprintf("No DEGS is == > %s", length(DEGS)))
+                print(cat("Longitud del vector DEGS ==> ", length(DEGS)))
+                
+              } else {
+                print(sprintf("Removing %s from expression data after Size factors calculation", out.factors))
+                # #Create clade vector
+                # accessions.contrast <- accessions.contrast[accessions.contrast != out.factors]
+                # clade.vector <- get.clade.vector(dataset = accesions.info,
+                #                                contrast = accessions.contrast,
+                #                                mode = "clade")
+                # print(cat("Length of clade vector is ==>", length(clado.vector)))
+                # #Create constrast factor
+                # below_quantile <- c(below_quantile[below_quantile !=  out.factors])
+                # print(sprintf("Below quantile length--> %s", length(below_quantile)))
+                # above_quantile <- c(above_quantile[above_quantile != out.factors])
+                # print(sprintf("Above quantile length--> %s", length(above_quantile)))
+                # contrast.vector <- get.contrast.vector(accessions.contrast,
+                #                                      below_quantile = below_quantile,
+                #                                      above_quantile = above_quantile)
+                # 
+                # # Rearrange expression dataframe
+                # expression.data <- de.novo.table[, c("Row.Labels", below_quantile, above_quantile)]
+                # #Create Deseq2 object
+                # dds0 <- DESeq2::DESeqDataSetFromMatrix(countData = expression.data[2:dim(expression.data)[2]],
+                #                                      colData = colData.,
+                #                                      design = ~contrast+clado
+                #                                      )
+                # 
+              
+                #plotMA(resLFC0)
+                dds0 <- dds0[, !colnames(dds0) %in% out.factors]
+                message(sprintf("New Deseq object dimensions are ==> %s", dim(dds0)))
+                dds0 <- DESeq(dds0, test="LRT", reduced=~1)#prueba de verosimilitud compara ajuste actual vs modelo nulo
+                #dds0 <- DESeq(dds0, test="Wald")#prueba de Wald solo para dos condiciones
+                res0 <- results(dds0)
+                
+                resultsNames(dds0) # coeficientes
+                plotDispEsts(dds0) # estimaciones dispersiones  
+                plotMA(dds0)
+                stop()
+                
+                g_index <- as.numeric(rownames(expresion.data[replace_na(res0$padj < 0.05, FALSE),]))
+                DEGS <- c(DEGS, expresion.data$Row.Labels[as.numeric(rownames(expresion.data)) %in% g_index])
+                de.novo.DEGS <- c(de.novo.DEGS, DEGS)
+                
+                print(sprintf("DEGS = %1$s", DEGS))
+                print(sprintf("No DEGS is == > %s", length(DEGS)))
+                print(cat("Longitud del vector DEGS ==> ", length(DEGS)))
+              }
+              }
+          }
+         write.csv(data.frame(table(de.novo.DEGS)),"../../results/DEGS/DEGS_denovo.csv") 
+        } 
+        }
+      
+      
+      } 
+  #   else if (grepl("REFs_$", dir.)){
+  #   ### Entering potato_denovo expression files
+  #   print(dir.)
+  #   for (file. in list.files(dir.)){
+  #     #print(file.)
+  #     if (grepl("^A_Potato", file.)){
+  #       print(file.)
+  #       #accessing expression data
+  #       de_novo_table <- read.table(paste0(dir.,"/", file.), sep ="\t", header = TRUE, na.strings="")
+  #       View(de_novo_table)
+  #     } else if (grepl("^Annot", file.)){
+  #       print(file.)
+  #       #accessing annotation file
+  #       REFs_table <- read.delim(paste0(dir.,"/", file.), sep="\t", header=TRUE, na.strings="")
+  #       View(REFs_table)
+  #       
+  #     }
+  #   }
+  # }
+  }
+}
+```
+
+```{r}
+View(colData.)
+```

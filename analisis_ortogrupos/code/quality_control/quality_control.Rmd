@@ -1,0 +1,97 @@
+```{r}
+library(dplyr)
+library(corrplot)
+require(ggplot2)
+library(vsn)
+```
+
+
+```{r}
+for (dir. in list.dirs("../data")){
+  if (grepl("denovo$", dir.)){
+    ### Entering potato_denovo expression files (Universidad Nacional)
+    print(dir.)
+    for (file. in list.files(dir.)){
+      #print(file.)
+      if (grepl("TPM", file.)){
+        print(file.)
+        #Accessing expression data for REFs counts for A statistic
+        de_novo_table <- read.delim(paste0(dir.,"/", file.), sep="\t",header=TRUE, na.strings="") %>% select("Row.Labels", starts_with("A"))
+        View(de_novo_table)
+        # Quality Control ------------------------------------------------------------
+        # Histogram
+        hist.saving.folder <- "/home/andres/Documents/Tesis/analisis_ortogrupos/results/quality_control/de_novo/histogram/"
+        if (!file.exists(hist.saving.folder)){
+          dir.create(hist.saving.folder)
+        }
+        for (col in colnames(de_novo_table[2:dim(de_novo_table)[2]])){
+          hist. <- hist(de_novo_table[[col]], col="dodgerblue3",
+          main = col,
+          xlab = 'Expresión')
+          pdf(paste0(hist.saving.folder,col,".pdf"))
+          plot(hist.)
+          dev.off()
+        }
+        # Corrplot
+        corr.plot <- corrplot(cor(de_novo_table[2:dim(de_novo_table)[2]]))
+        
+        # MeanSDplot
+        meanSdPlot(as.matrix(de_novo_table[2:dim(de_novo_table)[2]]))
+        
+        # Box plots
+        box.saving.folder <- "/home/andres/Documents/Tesis/analisis_ortogrupos/results/quality_control/de_novo/Boxplots/"
+        if (!file.exists(box.saving.folder)){
+        dir.create(box.saving.folder)
+        }
+        boxplot(de_novo_table[,2:dim(de_novo_table)[2]])
+        # pdf(paste0(box.saving.folder,"boxplot.pdf"))
+        # plot(box.plot)
+        # dev.off()
+      
+      }
+    }
+  }else if (grepl("REFs$", dir.)){
+    ### Entering REFs expression files (Nature paper)
+    print(dir.)
+    for (file. in list.files(dir.)){
+      #print(file.)
+      if (grepl("TPM", file.)){
+        print(file.)
+        #Accessing expression data for REFs counts for A statistic
+        REFs_table <- read.delim(paste0(dir.,"/", file.), sep="\t",header=TRUE, na.strings="") %>% select("HOG_ID", starts_with("A"))
+        View(REFs_table)
+        # Quality Control ------------------------------------------------------------
+        # Histogram
+        hist.saving.folder <- "/home/andres/Documents/Tesis/analisis_ortogrupos/results/quality_control/REFs/histogram/"
+        if (!file.exists(hist.saving.folder)){
+          dir.create(hist.saving.folder)
+        }
+        for (col in colnames(REFs_table[2:dim(REFs_table)[2]])){
+          hist. <- hist(REFs_table[[col]], col="dodgerblue3",
+          main = col,
+          xlab = 'Expresión')
+          pdf(paste0(hist.saving.folder,col,".pdf"))
+          plot(hist.)
+          dev.off()
+        }
+        # Boxplots
+        box.saving.folder <- "/home/andres/Documents/Tesis/analisis_ortogrupos/results/quality_control/de_novo/Boxplots/"
+        if (!file.exists(box.saving.folder)){
+        dir.create(box.saving.folder)
+        }
+        boxplot(REFs_table[,2:dim(REFs_table)[2]])
+        # pdf(paste0(box.saving.folder,"boxplot.pdf"))
+        # plot(box.plot)
+        # dev.off()
+        
+        # Corrplot
+        corr.plot <- corrplot(cor(REFs_table[2:dim(REFs_table)[2]]))
+        
+        # MeanSDplot
+        meanSdPlot(as.matrix(REFs_table[2:dim(REFs_table)[2]]))
+      }
+    }
+  }
+}
+```
+

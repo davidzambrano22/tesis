@@ -1,0 +1,31 @@
+```{r}
+library(dplyr)
+```
+
+
+```{r}
+for (dir. in list.dirs("../../data")){
+  if (grepl("denovo$", dir.) || grepl("REFs$", dir.)){
+    ### Entering potato_denovo expression files (Universidad Nacional)
+    if (grepl("denovo$", dir.)){
+      print(dir.)
+      for (file. in list.files(dir.)){
+        #print(file.)
+        if (grepl("^Annot", file.)){
+          print(file.)
+          #accessing annotation data for denovo accesions
+          annot.info <- read.delim(paste0(dir.,"/", file.), sep="\t", header=TRUE, na.strings="")
+          categories.dataframe <- table(annot.info$Pathways) %>% as.data.frame() %>% arrange(desc(Freq))
+          flav.categories <- grepl("(Phenyl)|(Flav)|(Anth)", categories.dataframe$`Var1`)
+          #print(categories.dataframe$`Var1`[flav.categories])
+          
+          annot.info <- annot.info[annot.info$`Pathways` %in% categories.dataframe$`Var1`[flav.categories],"HOG_ID"]
+          flav.HOGS <- data.frame(table(annot.info))
+          write.csv(flav.HOGS, "../../results/flav_HOGS/flaf.HOGS.csv")
+        }
+      }
+    }
+  }
+}
+```
+

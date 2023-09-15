@@ -1,0 +1,379 @@
+
+Loading Libraries
+```{r}
+library(dplyr)
+library(corrplot)
+library(igraph)
+source("./functions.R")
+```
+
+
+```{r}
+for (dir. in list.dirs("../../data/")){
+  if (grepl("denovo$", dir.) || grepl("REFs$", dir.)){
+    ### Entering potato_denovo expression files (Universidad Nacional)
+    if (grepl("denovo$", dir.)){
+      print(dir.)
+      for (file. in list.files(dir.)){
+        if (grepl("^A_TPM", file.)){
+          print(file.)
+          de.novo.table <- read.delim(paste0(dir.,"/", file.), sep="\t", header=TRUE, na.strings="") %>% select("Row.Labels", starts_with("A")) 
+          # ====================== Loading gene names of interest  ================================================
+          # --Load DEGS
+          
+          # --Load genes from Falvonoids path
+          message("Loading most variable HOGS...")
+          floavonoid.path.HOGS <- read.csv("../../results/flav_HOGS/flaf.HOGS.csv")$`annot.info` %>% as.vector()
+
+          # --Load most variable HOGS
+          # message("Loading most variable HOGS...")
+          # most.var.HOGS.names <- read.csv("../../results/most_variable_genes/6000.csv")$`Var1` %>% as.vector()
+          
+          # --Load DEGS (differentially expressed HOGS)
+          message("Loading differentially expressed HOGS...")
+          D.E.HOGS <- c()
+          HOGS.network <-  read.csv("../../results/DEGS/DEGS_cyani_total.csv")$`de.novo.DEGS` %>% as.vector() #Loading total and cyani DEGS
+          D.E.HOGS <- c(D.E.HOGS, HOGS.network) 
+          HOGS.network <-  read.csv("../../results/DEGS/DEGS_delph_peon.csv")$`de.novo.DEGS` %>% as.vector() #Loading delph and peon DEGS
+          D.E.HOGS <- c(D.E.HOGS, HOGS.network) 
+          D.E.HOGS <- names(table(D.E.HOGS)) #Define unique HOGS
+          message(cat("Number of unique differentially expressed HOGS is ==>", length(D.E.HOGS)))
+          
+          # ====================== Obtaining expression matrix for all genes of interest ==========================
+          message("Obtaining expression matrix for all genes of interest...")
+          network.genes <- c(D.E.HOGS, floavonoid.path.HOGS) # --> Enter here as a vector all genes loaded from previous step
+          expresion.data <- get.filtered.matrix(network.genes, de.novo.table)
+          rownames(expresion.data) <- expresion.data$Row.Labels #Rename expression data with gene names
+          expresion.data <- expresion.data %>% select(-Row.Labels)
+          print(cat("Filtered dataframe dimenstions are --> ", dim(expresion.data)))
+
+          # ====================== Obtaining correlation matrix for all genes of interest ==========================
+          # --Obtaining correlation matrix for all genes
+          message("Obtaining correlation matrix for all genes of interest...")
+          cor.matrix <- abs(cor(t(expresion.data), use = "pairwise.complete.obs"))
+          #Rename correlation matrix with HOGS names
+          colnames(cor.matrix) <- rownames(expresion.data)
+          rownames(cor.matrix) <- rownames(expresion.data)
+
+          
+          
+          # ====================== Check point for correlated genes ==========================
+          # # --Filtering out low correlated genes
+          # High.corr.genes <- get.highCorr.genes(cor.matrix = cor.matrix)
+          # stop("Stopping code for mantenaince")
+
+          # ===================== Determining the best threshold to work with on getting the network =============
+          message("Getting clustering coefficients...")
+          # net.coefficients <- get.network.coefficients(cor.matrix) #Get clustering coefficients
+          # stop("Stop for mantainence")
+          
+          n <- nrow(cor.matrix)
+          C <- matrix(nrow = n, ncol = 100)
+          K <- matrix(nrow=n, ncol=100)
+          ltaos <- seq(0.01,0.99,by=0.01)
+          
+          for(tao in ltaos){
+            print(tao)
+            ##Matriz de adyacencia:
+            A=matrix(0,nrow=n,ncol=n)    
+            ##Completa la matriz de adyacencia usando la funci?n de adyacencia:
+            for(i in 1:n){  
+              A[which(cor.matrix[,i]>=tao),i]<-1
+              A[which(cor.matrix[,i]<tao),i]<-0
+            }
+            ##Transforma la matriz A en un objeto igraph:
+            A=graph.adjacency(A,mode="undirected",diag=FALSE)
+            ##Calcula el Ci de los nodos:
+            Cv=transitivity(A,type="local")
+            ##Calcula el ki de los nodos:
+            Kv=degree(A,loops=FALSE)
+            ##Guarda Ci y ki en los vectores C y K respectivamente:
+            K[,round(tao*100,0)]<-Kv
+            C[,round(tao*100,0)]<-Cv
+          }
+          
+          Cr=Co=rep(0,100)
+          ##Para cada valor de tao:
+          for(i in round(ltaos*100,0))
+            {  
+            gn<-which(K[,i]>=1)#Posici?n de los genes conectados en la red
+            kn=length(gn)#N?mero de nodos en la red
+            k1=1/kn*sum(K[gn,i])#Variable en ecuaci?n 3 (Ver Elo et.al. 2007)
+            k2=1/kn*sum(K[gn,i]^2)#Variable en ecuaci?n 3 (Ver Elo et.al. 2007)
+            Co[i]=((k2-k1)^2)/(kn*k1^3) #Coeficiente de agrupamiento esperado para una red aleatoria
+            if(kn==0){Co[i]=0}#Si no hay nodos conectados: Co=0
+            gn<-which(K[,i]>1)#Posici?n de los genes con k1>1.
+            kn=length(gn)#N?mero de genes con m?s de una arista en la red
+            Cr[i]=1/kn*sum(C[gn,i])#Coeficiente de agrupamiento observado en la red.
+            if(kn==0){Cr[i]=0}#Si no hay nodos conectados: Cr=0
+          }
+          
+         plot(ltaos,abs(Cr-Co)[ltaos*100],t="l",xlab="Threshold",ylab="|C-Co|")
+         
+         dif=runmed(abs(Cr-Co),k=3,endrule="constant")[1:100]
+         plot(ltaos,dif[ltaos*100],t="l",xlab="Threshold",ylab="|C-Co|")
+         identify(ltaos,dif[ltaos*100],n=1) / 100
+        
+          red_info <- list()
+          for (tao in c(0.88)){
+            red_n <- 1
+            #Define matriz de adyacencia:
+            A=matrix(0,nrow=n,ncol=n)   
+          
+            #Completa la matriz de adyacencia usando la función de adyacencia:
+            for(i in 1:n)
+            {  
+              A[which(cor.matrix[,i]>=tao),i]<-1
+              A[which(cor.matrix[,i]<tao),i]<-0
+            }
+            
+              #Trabajando con los nombres de los genes
+              colnames(A) <- rownames(A) <- rownames(cor.matrix)
+              
+              #Convierte la diagonal en ceros (red no dirigida):
+              diag(A)<-0
+              
+              #Elimina nodos no conectados:
+              A=A[which(K[,round(tao*100,0)]>0),which(K[,round(tao*100,0)]>0)]
+          
+              class(A)
+              dim(A)
+              
+              A=graph.adjacency(A,mode="undirected",add.colnames=NULL,diag=FALSE)
+              #plot(A)
+              
+              vertex_colors <- rep("lightblue", 1181)
+              vertex_colors[1:924] <- "red"
+          
+              plot.igraph(A,layout=layout_with_kk,vertex.color = vertex_colors,vertex.size=5,edge.color="darkgreen",vertex.label.font=1,vertex.label.cex=0.6, height=800, width=800, rescale = T)
+          }
+          
+           #Análisis de red
+    
+          #save graph object in the list info
+          red_info[[as.character(tao)]][["A"]] <- A
+          
+          #Número de nodos
+          red_info[[as.character(tao)]][["Length"]] <-  length(V(A))
+          
+          #Extrae clusters
+          red_info[[as.character(tao)]][["Clusters"]] <- clusters(A, mode=c("weak"))
+          write.csv(data.frame(red_info[[as.character(tao)]][["Clusters"]]$membership), "../../results/Networks/small/T.88/node_genes/node_info.csv")
+          
+          #Tamaño de clusters
+          red_info[[as.character(tao)]][["Clusters size"]] <- clusters(A, mode=c("weak"))$csize
+          
+          #Transitividad
+          red_info[[as.character(tao)]][["Transitividad"]] <- transitivity(A, type="global") 
+          
+          #Diámetro
+          red_info[[as.character(tao)]][["Diámetro"]] <- diameter(A)
+          
+          #Guarda la red
+          write.graph(A,sprintf("../../results/Networks/small/T.88/graph/edges_%s.txt", tao),format="ncol")
+      
+          #degree
+          deg <- degree(A, mode="all")
+          red_info[[as.character(tao)]][["Grado"]] <- deg
+          #Guarda tabla con información de grado
+          degree.table <- data.frame(Degree = red_info[[as.character(tao)]][["Grado"]])
+          write.csv(degree.table, "../../results/Networks/small/T.88/degree/degree.csv")
+          barplot(table(deg),las=2)
+          plot(A, vertex.size=deg)
+          plot.igraph(A,layout=layout_with_kk,vertex.color = 'lightblue',vertex.size=deg,edge.color="darkgreen",vertex.label.font=1,vertex.label.cex=0.6 )
+          
+          hist(deg, breaks=1:vcount(A)-1, main="Histogram of node degree")
+          
+          
+          deg.dist <- degree_distribution(A, cumulative=T, mode="all")
+          plot( x=0:max(deg), y=1-deg.dist, pch=19, cex=1.2, col="orange", 
+                xlab="Degree", ylab="Cumulative Frequency")
+          
+          #Guarda información de centralización
+          red_info[[as.character(tao)]][["centr_degree"]] <- centr_degree(A, mode="in", normalized=T)
+          # cd<-centr_degree(A, mode="in", normalized=T)
+          # cd$centralization
+          # cd$res
+          
+          #Eigen centrality
+          red_info[[as.character(tao)]][["eigen_centrality"]] <- eigen_centrality(A, directed=F, weights=NA)
+          # eigc<-eigen_centrality(A, directed=F, weights=NA)
+          
+          #Hub score
+          red_info[[as.character(tao)]][["hub_score"]] <- hub_score(A, weights=NA)$vector
+          # hs <- hub_score(A, weights=NA)$vector
+          # hs
+          # sort(hs,decreasing = TRUE)
+          # sort(deg,decreasing = TRUE)
+          # 
+            
+          # plot(seq(0.01, 0.99, 0.01), abs(net.coefficients[[1]]-net.coefficients[[2]])[seq(1, 99, 1)], t="l",xlab="Threshold",ylab="|C-Co|")
+          # 
+          # dif=runmed(abs(net.coefficients[[1]]-net.coefficients[[2]]),k=3,endrule="constant")[1:100]
+          # plot(seq(0.01, 0.99, 0.01),dif[seq(1, 99, 1)],t="l",xlab="Threshold",ylab="|C-Co|")
+          # identify(seq(0.01, 0.99, 0.01),dif[seq(1, 99, 1)],n=1) / 100
+          
+          # ===================== Getting ultimate network network ==============================================
+          # thresholds <- c(0.4) # Define the thresholds based on the previous plot
+          # A <- get.network.graph(corrMatrix = cor.matrix, thresholds = thresholds)
+          # 
+          # vertex_colors <- rep("lightblue", 1181)
+          # vertex_colors[1:924] <- "red"
+          # 
+          # # -- Plot corr network --
+          # plot.igraph(A,layout=layout_with_kk,
+          #             vertex.color = vertex_colors,
+          #             vertex.size=5,
+          #             edge.color="darkgreen",
+          #             vertex.label.font=1,
+          #             vertex.label.cex=0.6,
+          #             height=800,
+          #             width=800,
+          #             rescale = T)
+          
+          
+        } else if (grepl("^N0", file.)){
+          print(file.)
+          annot.file <- read.delim(paste0(dir.,"/", file.), sep="\t", header=TRUE, na.strings="")
+          #View(annot.file)
+          
+          for (net.file in list.files("../../results/Networks/small/")){
+            message(sprintf("Working with %s folder...", net.file))
+            # ================================== Identify degree genes in each HOG =========================================
+            # ================================= By degree
+            highest.degree.HOGS <- read.csv("../../results/Networks/small/T.88/degree/degree.csv") %>% arrange(desc(Degree))
+            hist(highest.degree.HOGS$Degree)
+            #View(highest.degree.HOGS)
+            
+            
+            # ================================ By Node
+            node.dataframe <- read.csv("../../results/Networks/small/T.88/node_genes/node_info.csv")
+            for (node in names(table(node.dataframe[,2]))){
+              print(node)
+              HOG.genes <- c()
+              node.HOGS <- node.dataframe[,1][node.dataframe[,2] == as.integer(node)]
+              #print(node.HOGS)
+              for (n in node.HOGS){
+                #print(n)
+                H.g <- annot.file[annot.file["HOG"] == n, 4:dim(annot.file)[2]]
+                for (h in H.g){
+                  if (is.na(h)) {next}
+                  genes. <- strsplit(h, ",")[[1]]
+                  HOG.genes <- c(HOG.genes, genes.)
+                }
+  
+              }
+              print(HOG.genes)
+              HOG.genes <- data.frame(genes = HOG.genes)
+              write.csv(HOG.genes, paste0(sprintf("../../results/Networks/small/%s", net.file), sprintf("/node_genes/node_%s.csv", node)))
+            }
+            # ================================ Create node barplot
+            node.names <- c()
+            node.n.genes <- c()
+            for (f in list.files("../../results/Networks/small/T.88/node_genes/")){
+              if (!grepl("info", f)){
+                node.name <- gsub("[^0-9]*", "", f)
+                node.names <- c(node.names, node.name)
+                node.dataframe <- read.csv(paste0("../../results/Networks/small/T.88/node_genes/", f))
+                n.genes <- dim(node.dataframe)[1]
+                node.n.genes <- c(node.n.genes, n.genes)
+              }
+            }
+            barplot(node.n.genes, as.numeric(node.names), names.arg = node.names, legend.text = "Genes por nodo")
+          }
+          # ================================ Extract most connected nodes by module
+          node.dataframe <- read.csv("../../results/Networks/small/T.88/node_genes/node_info.csv")
+          highest.degree.HOGS <- read.csv("../../results/Networks/small/T.88/degree/degree.csv") %>% arrange(desc(Degree))
+          for (node in names(table(node.dataframe[,2]))){
+            print(node)
+            HOGS.in.node <- node.dataframe[node.dataframe[, 2] == as.integer(node), 1]
+            print(HOGS.in.node)
+            HOG.degree <- highest.degree.HOGS[as.vector(highest.degree.HOGS[,1]) %in% HOGS.in.node, 2]
+            print(HOG.degree)
+            hist(HOG.degree, main = sprintf("Módulo %s", node), xlab = "Grado")
+        }
+        
+          # ================================ Extract most connected nodes by module
+          node.dataframe <- read.csv("../../results/Networks/small/T.88/node_genes/node_info.csv")
+          highest.degree.HOGS <- read.csv("../../results/Networks/small/T.88/degree/degree.csv") %>% arrange(desc(Degree))
+          module.names <- c()
+          module.size <- c()
+          for (module in names(table(node.dataframe[,2]))){
+            print(module)
+            module.names <- c(module.names, module)
+            HOG.size <- length(node.dataframe[node.dataframe[, 2] == as.integer(module), 1])
+            print(HOG.size)
+            module.size <- c(module.size, HOG.size)
+          }
+          barplot(module.size, names.arg = module.names, col = "blue", main = "Tamaño de Nodos", legend.text = "Ortogrupos por nodo")
+          
+          # ================================ Depict barplot for anthocyanin HOGS
+          node.dataframe <- read.csv("../../results/Networks/small/T.88/node_genes/node_info.csv")
+          highest.degree.HOGS <- read.csv("../../results/Networks/small/T.88/degree/degree.csv") %>% arrange(desc(Degree))
+          module.names <- c()
+          annot.HOGS.byModule <- c()
+          DE.HOGS.byModule <- c()
+          for (module in names(table(node.dataframe[,2]))){
+            print(module)
+            module.names <- c(module.names, module)
+            HOGS.in.node <- node.dataframe[node.dataframe[, 2] == as.integer(module), 1]
+            print(HOGS.in.node)
+            HOGS.in.annot <- length(HOGS.in.node [HOGS.in.node %in% floavonoid.path.HOGS])
+            annot.HOGS.byModule <- c(annot.HOGS.byModule, HOGS.in.annot)
+            
+            HOGS.in.DEH <- length(HOGS.in.node [HOGS.in.node %in% D.E.HOGS])
+            DE.HOGS.byModule <- c(DE.HOGS.byModule, HOGS.in.DEH)
+          }
+          values_matrix <- matrix(0, ncol = 19, nrow = 3)
+          values_matrix[1,] <- module.size
+          values_matrix[2,] <- annot.HOGS.byModule
+          values_matrix[3,]  <- DE.HOGS.byModule
+          barplot(
+          values_matrix,
+          beside = TRUE,
+          col = c("green", "blue", "red"),
+          names.arg = module.names,
+          legend.text = c("Tamaño de módulo","Anotación antocianinas", "Ortogrupos Dif. Exp"),
+          ylim = c(0, max(values_matrix) * 1.2),  # Adjust ylim for better visualization
+          main = "Ortogrupos de diferentes categorías por cada módulo"
+        )
+          
+          
+          annot.HOGS.byModule <- c()
+          DE.HOGS.byModule <- c()
+          for (module in names(table(node.dataframe[,2]))){
+            print(module)
+            module.names <- c(module.names, module)
+            HOGS.in.node <- node.dataframe[node.dataframe[, 2] == as.integer(module), 1]
+            print(HOGS.in.node)
+            HOGS.in.annot <- length(HOGS.in.node [HOGS.in.node %in% floavonoid.path.HOGS])
+            annot.HOGS.byModule <- c(annot.HOGS.byModule, HOGS.in.annot)
+            
+            HOGS.in.DEH <- length(HOGS.in.node [HOGS.in.node %in% D.E.HOGS])
+            DE.HOGS.byModule <- c(DE.HOGS.byModule, HOGS.in.DEH)
+          }
+          values_matrix <- matrix(0, ncol = 19, nrow = 3)
+          values_matrix[1,] <- annot.HOGS.byModule
+          values_matrix[2,]  <- DE.HOGS.byModule
+          barplot(
+          values_matrix,
+          beside = TRUE,
+          col = c("blue", "red"),
+          names.arg = module.names,
+          legend.text = c("Anotación antocianinas", "Ortogrupos Dif. Exp"),
+          ylim = c(0, max(values_matrix) * 1.2),  # Adjust ylim for better visualization
+          main = "Ortogrupos de diferentes categorías por cada módulo"
+        )
+        }
+        
+        }
+      }
+    }
+  }
+```
+
+
+```{r}
+hist(cor.matrix)
+```
+
