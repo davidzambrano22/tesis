@@ -75,9 +75,9 @@ for (dir. in list.dirs("../../data/")){
                                                                  accesions.dataset=accesions.info,
                                                                  accessions.vector=accesion_names, 
                                                                  quantiles.vector=quantiles)
-          #stop("Stopping to determine values of anthocyanin")
+          
           for (a in names(accesions.by.anthocyanin)){
-            DEGS <- c()
+            total.DEH <- c()
             message(sprintf("GETTING DEGs FOR CONTRASTS FOR %s", a))
             for (q in quantiles){
               message(sprintf("Including QUANTILE %s for contrast", q))
@@ -135,54 +135,32 @@ for (dir. in list.dirs("../../data/")){
                 
               } else {
                 print(sprintf("Removing %s from expression data after Size factors calculation", out.factors))
-                # #Create clade vector
-                # accessions.contrast <- accessions.contrast[accessions.contrast != out.factors]
-                # clade.vector <- get.clade.vector(dataset = accesions.info,
-                #                                contrast = accessions.contrast,
-                #                                mode = "clade")
-                # print(cat("Length of clade vector is ==>", length(clado.vector)))
-                # #Create constrast factor
-                # below_quantile <- c(below_quantile[below_quantile !=  out.factors])
-                # print(sprintf("Below quantile length--> %s", length(below_quantile)))
-                # above_quantile <- c(above_quantile[above_quantile != out.factors])
-                # print(sprintf("Above quantile length--> %s", length(above_quantile)))
-                # contrast.vector <- get.contrast.vector(accessions.contrast,
-                #                                      below_quantile = below_quantile,
-                #                                      above_quantile = above_quantile)
-                # 
-                # # Rearrange expression dataframe
-                # expression.data <- de.novo.table[, c("Row.Labels", below_quantile, above_quantile)]
-                # #Create Deseq2 object
-                # dds0 <- DESeq2::DESeqDataSetFromMatrix(countData = expression.data[2:dim(expression.data)[2]],
-                #                                      colData = colData.,
-                #                                      design = ~contrast+clado
-                #                                      )
-                # 
               
                 #plotMA(resLFC0)
                 dds0 <- dds0[, !colnames(dds0) %in% out.factors]
                 message(sprintf("New Deseq object dimensions are ==> %s", dim(dds0)))
-                dds0 <- DESeq(dds0, test="LRT", reduced=~1)#prueba de verosimilitud compara ajuste actual vs modelo nulo
+                dds0 <- DESeq(dds0, test="LRT", reduced=~1) #prueba de verosimilitud compara ajuste actual vs modelo nulo
                 #dds0 <- DESeq(dds0, test="Wald")#prueba de Wald solo para dos condiciones
                 res0 <- results(dds0)
                 
                 resultsNames(dds0) # coeficientes
-                plotDispEsts(dds0) # estimaciones dispersiones  
-                plotMA(dds0)
-                stop()
+                #plotDispEsts(dds0) # estimaciones dispersiones  
+                #plotMA(dds0)
                 
-                g_index <- as.numeric(rownames(expresion.data[replace_na(res0$padj < 0.05, FALSE),]))
-                DEGS <- c(DEGS, expresion.data$Row.Labels[as.numeric(rownames(expresion.data)) %in% g_index])
-                de.novo.DEGS <- c(de.novo.DEGS, DEGS)
+                #valores P sin shrinkage
+                Padj0 <- data.frame(p=res0$padj[res0$padj<0.95])
+                ggplot(Padj0, aes(x=p)) + geom_histogram(breaks = seq(0,0.95,0.05)) +
+                  labs(y='frecuencia') + scale_x_continuous(breaks = seq(0,0.95,0.05))
                 
-                print(sprintf("DEGS = %1$s", DEGS))
-                print(sprintf("No DEGS is == > %s", length(DEGS)))
-                print(cat("Longitud del vector DEGS ==> ", length(DEGS)))
+                DEH <- de.novo.table[replace_na(res0$padj <= 0.05, F), "Row.Labels"]  #Get differetentially expressed HOGS names
+                sprintf("DEH for quantile %d and Anthocyanin %s =", q, paste(DEH, collapse = ","))
+                total.DEH <- c(total.DEH, DEH)
               }
-              }
-          }
-         write.csv(data.frame(table(de.novo.DEGS)),"../../results/DEGS/DEGS_denovo.csv") 
-        } 
+            }
+            DEHs.dataframe <- data.frame(table(total.DEH))
+            write.csv(DEHs.dataframe, sprintf("../../results/DEGS/DEGS_denovo/%s.csv", a)) 
+            }
+          } 
         }
       
       
