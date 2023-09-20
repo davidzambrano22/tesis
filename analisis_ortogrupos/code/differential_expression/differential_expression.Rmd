@@ -24,6 +24,8 @@ source("./functions_diffExp.R")
 ```
 
 ```{r}
+SHRINKAGE <- T
+
 for (dir. in list.dirs("../../data/")){
   if (grepl("denovo$", dir.) || grepl("REFs$", dir.)){
     ### Entering potato_denovo expression files (Universidad Nacional)
@@ -34,7 +36,6 @@ for (dir. in list.dirs("../../data/")){
         #print(file.)
         if (grepl("^A_TPM", file.)){
           #Access to counts A file
-          de.novo.DEGS <- c()
           print(file.)
           # ==================== Accessing expression data
           de.novo.table <- read.delim(paste0(dir.,"/", file.), sep="\t", header=TRUE, na.strings="") %>% select("Row.Labels", starts_with("A")) 
@@ -123,42 +124,67 @@ for (dir. in list.dirs("../../data/")){
                 res0 <- results(dds0)
                 resultsNames(dds0)
                 # plotDispEsts(dds0)
-                print(resultsNames(dds0))
-                resLFC0 <- DESeq2::lfcShrink(dds0, coef="contrast_1_vs_0", type="apeglm")
-                g_index <- as.numeric(rownames(expresion.data[replace_na(resLFC0$padj < 0.05, FALSE),]))
-                DEGS <- c(DEGS, expresion.data$Row.Labels[as.numeric(rownames(expresion.data)) %in% g_index])
-                de.novo.DEGS <- c(de.novo.DEGS, DEGS)
                 
-                print(sprintf("DEGS = %1$s", DEGS))
-                print(sprintf("No DEGS is == > %s", length(DEGS)))
-                print(cat("Longitud del vector DEGS ==> ", length(DEGS)))
+                if (isTRUE(SHRINKAGE)){
+                  message("Applying shrinkage method to fitted model")
+                  resLFC0 <- lfcShrink(dds0, type = "apeglm")
+                  #Get p values with Shrinkage
+                  Padj0 <- data.frame(p=res0$padj[resLFC0$padj<0.95])
+                  ggplot(Padj0, aes(x=p)) + geom_histogram(breaks = seq(0,0.95,0.05)) +
+                    labs(y='frecuencia') + scale_x_continuous(breaks = seq(0,0.95,0.05))
+                  
+                  DEH <- de.novo.table[replace_na(resLFC0$padj <= 0.05, F), "Row.Labels"]  #Get differetentially expressed HOGS names
+                  sprintf("DEH for quantile %d and Anthocyanin %s =", q, paste(DEH, collapse = ","))
+                  total.DEH <- c(total.DEH, DEH)
+                  
+                } else {
+                  # Get p values
+                  Padj0 <- data.frame(p=res0$padj[res0$padj<0.95])
+                  ggplot(Padj0, aes(x=p)) + geom_histogram(breaks = seq(0,0.95,0.05)) +
+                    labs(y='frecuencia') + scale_x_continuous(breaks = seq(0,0.95,0.05))
+                  
+                  DEH <- de.novo.table[replace_na(res0$padj <= 0.05, F), "Row.Labels"]  #Get differetentially expressed HOGS names
+                  sprintf("DEH for quantile %d and Anthocyanin %s =", q, paste(DEH, collapse = ","))
+                  total.DEH <- c(total.DEH, DEH)
+                }
                 
               } else {
                 print(sprintf("Removing %s from expression data after Size factors calculation", out.factors))
-              
                 #plotMA(resLFC0)
                 dds0 <- dds0[, !colnames(dds0) %in% out.factors]
-                message(sprintf("New Deseq object dimensions are ==> %s", dim(dds0)))
+                message(sprintf("New Deseq object dimensions are ==> %s", paste(dim(dds0), collapse = ",")))
                 dds0 <- DESeq(dds0, test="LRT", reduced=~1) #prueba de verosimilitud compara ajuste actual vs modelo nulo
                 #dds0 <- DESeq(dds0, test="Wald")#prueba de Wald solo para dos condiciones
                 res0 <- results(dds0)
-                
-                resultsNames(dds0) # coeficientes
+                resultsNames(dds0) 
                 #plotDispEsts(dds0) # estimaciones dispersiones  
                 #plotMA(dds0)
-                
-                #valores P sin shrinkage
-                Padj0 <- data.frame(p=res0$padj[res0$padj<0.95])
-                ggplot(Padj0, aes(x=p)) + geom_histogram(breaks = seq(0,0.95,0.05)) +
-                  labs(y='frecuencia') + scale_x_continuous(breaks = seq(0,0.95,0.05))
-                
-                DEH <- de.novo.table[replace_na(res0$padj <= 0.05, F), "Row.Labels"]  #Get differetentially expressed HOGS names
-                sprintf("DEH for quantile %d and Anthocyanin %s =", q, paste(DEH, collapse = ","))
-                total.DEH <- c(total.DEH, DEH)
+                  
+                if (isTRUE(SHRINKAGE)){
+                  resLFC0 <- lfcShrink(dds0, type = "apeglm")
+                  #Get p values with Shrinkage
+                  Padj0 <- data.frame(p=res0$padj[resLFC0$padj<0.95])
+                  ggplot(Padj0, aes(x=p)) + geom_histogram(breaks = seq(0,0.95,0.05)) +
+                    labs(y='frecuencia') + scale_x_continuous(breaks = seq(0,0.95,0.05))
+                  
+                  DEH <- de.novo.table[replace_na(resLFC0$padj <= 0.05, F), "Row.Labels"]  #Get differetentially expressed HOGS names
+                  sprintf("DEH for quantile %d and Anthocyanin %s =", q, paste(DEH, collapse = ","))
+                  total.DEH <- c(total.DEH, DEH)
+                  
+                } else {
+                  # Get p values
+                  Padj0 <- data.frame(p=res0$padj[res0$padj<0.95])
+                  ggplot(Padj0, aes(x=p)) + geom_histogram(breaks = seq(0,0.95,0.05)) +
+                    labs(y='frecuencia') + scale_x_continuous(breaks = seq(0,0.95,0.05))
+                  
+                  DEH <- de.novo.table[replace_na(res0$padj <= 0.05, F), "Row.Labels"]  #Get differetentially expressed HOGS names
+                  sprintf("DEH for quantile %d and Anthocyanin %s =", q, paste(DEH, collapse = ","))
+                  total.DEH <- c(total.DEH, DEH)
+                }
               }
             }
             DEHs.dataframe <- data.frame(table(total.DEH))
-            write.csv(DEHs.dataframe, sprintf("../../results/DEGS/DEGS_denovo/%s.csv", a)) 
+            write.csv(DEHs.dataframe, sprintf("../../results/DEGS/DEGS_denovo/%s.csv", a))
             }
           } 
         }

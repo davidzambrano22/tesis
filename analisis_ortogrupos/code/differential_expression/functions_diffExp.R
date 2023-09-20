@@ -1,4 +1,4 @@
-library(DESeq2)
+require(DESeq2)
 
 # differential expression -------------------------------------------------
 get_DEGs <- function(dataset, cond.1.vector, cond.2.vector, treatments){ #p.value, covariable=FALSE){
