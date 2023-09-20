@@ -25,6 +25,7 @@ source("./functions_diffExp.R")
 
 ```{r}
 SHRINKAGE <- T
+clade.datatype <- "clade"
 
 for (dir. in list.dirs("../../data/")){
   if (grepl("denovo$", dir.) || grepl("REFs$", dir.)){
@@ -92,9 +93,7 @@ for (dir. in list.dirs("../../data/")){
               # =========================== Create the clade vector
               clade.vector <- get.clade.vector(dataset = accesions.info,
                                                contrast = accessions.contrast,
-                                               mode = "clade")
-              
-              
+                                               mode = clade.datatype)
               
               # =========================== Create contrast factor
               contrast.vector <- get.contrast.vector(accessions.contrast,
@@ -161,7 +160,8 @@ for (dir. in list.dirs("../../data/")){
                 #plotMA(dds0)
                   
                 if (isTRUE(SHRINKAGE)){
-                  resLFC0 <- lfcShrink(dds0, type = "apeglm")
+                  message("Applying shrinkage method to fitted model")
+                  resLFC0 <- lfcShrink(dds0, type = "apeglm", coe)
                   #Get p values with Shrinkage
                   Padj0 <- data.frame(p=res0$padj[resLFC0$padj<0.95])
                   ggplot(Padj0, aes(x=p)) + geom_histogram(breaks = seq(0,0.95,0.05)) +
