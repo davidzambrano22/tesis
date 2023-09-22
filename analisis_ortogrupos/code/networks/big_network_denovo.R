@@ -327,11 +327,6 @@ for (dir. in list.dirs("../../data/")){
               # sort(deg,decreasing = TRUE)
               # 
               
-              # plot(seq(0.01, 0.99, 0.01), abs(net.coefficients[[1]]-net.coefficients[[2]])[seq(1, 99, 1)], t="l",xlab="Threshold",ylab="|C-Co|")
-              # 
-              # dif=runmed(abs(net.coefficients[[1]]-net.coefficients[[2]]),k=3,endrule="constant")[1:100]
-              # plot(seq(0.01, 0.99, 0.01),dif[seq(1, 99, 1)],t="l",xlab="Threshold",ylab="|C-Co|")
-              # identify(seq(0.01, 0.99, 0.01),dif[seq(1, 99, 1)],n=1) / 100
               }
             }
           }
