@@ -11,8 +11,8 @@ source("./functions.R")
 
 ```{r}
 SHRINKAGE <- F
-log_transform <- F
-mutual_info <- T
+log_transform <- T
+mutual_info <- F
 
 for (dir. in list.dirs("../../data/")){
   if (grepl("denovo$", dir.) || grepl("REFs$", dir.)){
@@ -61,18 +61,23 @@ for (dir. in list.dirs("../../data/")){
           if (log_transform){
             message("Obtaining log 2 expression matrix for all genes of interest...")
             network.genes <- c(most.var.HOGS.names, D.E.HOGS, floavonoid.path.HOGS) # --> Enter here as a vector all genes loaded from previous step
-            expression.data <- get.filtered.matrix(network.genes, de.novo.table)
+            expression.data <- get.filtered.matrix(names(table(c(most.var.HOGS.names, D.E.HOGS, floavonoid.path.HOGS))), de.novo.table)
+            #stop("Determining expression data matrix properties")
+            #View(expression.data)
             rownames(expression.data) <- expression.data$Row.Labels #Rename expression data with gene names
             expression.data <- expression.data %>% select(-Row.Labels) %>% log(base = 2)
+            View(expression.data)
+            #stop("Determining log matrix properties")
             print(cat("Filtered dataframe dimenstions are --> ", dim(expression.data)))
-            
-          } else {
+          } 
+          
+          else {
             message("Obtaining expression matrix for all genes of interest...")
             network.genes <- c(most.var.HOGS.names, D.E.HOGS, floavonoid.path.HOGS) # --> Enter here as a vector all genes loaded from previous step
-            expression.data <- get.filtered.matrix(network.genes, de.novo.table)
+            expression.data <- get.filtered.matrix(names(table(c(most.var.HOGS.names, D.E.HOGS, floavonoid.path.HOGS))), de.novo.table)
             rownames(expression.data) <- expression.data$Row.Labels #Rename expression data with gene names
             expression.data <- expression.data %>% select(-Row.Labels)
-            print(cat("Filtered dataframe dimenstions are --> ", dim(expression.data))) 
+            print(cat("Filtered dataframe dimenstions are --> ", dim(expression.data)))
           }
 
           # ====================== Obtaining similarity matrix for all genes of interest ==========================
@@ -81,6 +86,7 @@ for (dir. in list.dirs("../../data/")){
             message("Obtaining mututal information for all genes of interest...")
             discretized.matrix <-discretize(t(expression.data), disc = "equalfreq", nbins = ceiling(1+log(ncol(expression.data))))
             sim.matrix <- mutinformation(discretized.matrix, method = "shrink")
+            
             
             S1 <- sqrt(1/exp(-2*sim.matrix))
             S1[which(is.na(S1))] <- 0
@@ -94,6 +100,7 @@ for (dir. in list.dirs("../../data/")){
             #Rename correlation matrix with HOGS names
             colnames(cor.matrix) <- rownames(expression.data)
             rownames(cor.matrix) <- rownames(expression.data)
+            stop("Checking corr matrix")
           }
           
           # ====================== Check point for correlated genes ==========================
@@ -222,38 +229,79 @@ for (dir. in list.dirs("../../data/")){
           red_info[[as.character(tao)]][["Transitividad"]] <- transitivity(A, type="global") 
           
           #Diámetro
-          red_info[[as.character(tao)]][["Diámetro"]] <- diameter(A)
+          red_info[[as.character(tao)]][["Diametro"]] <- diameter(A)
           
-          #Guarda la red
-          if (mutual_info){
-            if (!dir.exists(sprintf("../../results/networks/big/%s/mutual_info/graph/", TAO))){
-             dir.create(sprintf("../../results/networks/big/%s/mutual_info/graph/", TAO))
-             write.graph(A,sprintf("../../results/networks/big/%s/mutual_info/graph/edges_%s.txt", tao, tao),format="ncol")
-             }
-          } else {
-            if (!dir.exists(sprintf("../../results/networks/big/%s/corr/graph/", TAO))){
-             dir.create(sprintf("../../results/networks/big/%s/corr/graph/", TAO))
-             write.graph(A,sprintf("../../results/networks/big/%s/corr/graph/edges_%s.txt", tao, tao),format="ncol")
-             }
+          ## ==================== SAVE NETWORK AND INFORMATION ABOUT DEGREE DEPENDING ON THE NATURE OF DATA (LOG OR NOT) =======================
+          if (log_transform){
+            if (!dir.exists("../../results/networks/big/log_transformed")){
+              dir.create("../../results/networks/big/log_transformed")
+            }
+            #Guarda la red
+              if (mutual_info){
+                if (!dir.exists(sprintf("../../results/networks/big/%s/mutual_info/graph/", TAO))){
+                 dir.create(sprintf("../../results/networks/big/%s/mutual_info/graph/", TAO))
+                 write.graph(A,sprintf("../../results/networks/big/%s/mutual_info/graph/edges_%s.txt", tao, tao),format="ncol")
+                 }
+              } else {
+                if (!dir.exists(sprintf("../../results/networks/big/%s/corr/graph/", TAO))){
+                 dir.create(sprintf("../../results/networks/big/%s/corr/graph/", TAO))
+                 write.graph(A,sprintf("../../results/networks/big/%s/corr/graph/edges_%s.txt", tao, tao),format="ncol")
+                 }
+              }
+              
+              #degree
+              deg <- degree(A, mode="all")
+              red_info[[as.character(tao)]][["Grado"]] <- deg
+              #Guarda tabla con información de grado
+              degree.table <- data.frame(Degree = red_info[["0.92"]][["Grado"]])
+              
+              if (mutual_info){
+                if (!dir.exists(sprintf("../../results/networks/big/%s/mutual_info/degree/", TAO))){
+                 dir.create(sprintf("../../results/networks/big/%s/mutual_info/degree/", TAO))
+                 write.graph(A,sprintf("../../results/networks/big/%s/mutual_info/degree/edges_%s.txt", tao, tao),format="ncol")
+                 }
+              } else {
+                if (!dir.exists(sprintf("../../results/networks/big/%s/corr/degree/", TAO))){
+                 dir.create(sprintf("../../results/networks/big/%s/corr/degree/", TAO))
+                 write.graph(A,sprintf("../../results/networks/big/%s/corr/degree/edges_%s.txt", tao, tao),format="ncol")
+                 }
+              }
+            
+            
+          } else{
+              #Guarda la red
+              if (mutual_info){
+                if (!dir.exists(sprintf("../../results/networks/big/%s/mutual_info/graph/", TAO))){
+                 dir.create(sprintf("../../results/networks/big/%s/mutual_info/graph/", TAO))
+                 write.graph(A,sprintf("../../results/networks/big/%s/mutual_info/graph/edges_%s.txt", tao, tao),format="ncol")
+                 }
+              } else {
+                if (!dir.exists(sprintf("../../results/networks/big/%s/corr/graph/", TAO))){
+                 dir.create(sprintf("../../results/networks/big/%s/corr/graph/", TAO))
+                 write.graph(A,sprintf("../../results/networks/big/%s/corr/graph/edges_%s.txt", tao, tao),format="ncol")
+                 }
+              }
+              
+              #degree
+              deg <- degree(A, mode="all")
+              red_info[[as.character(tao)]][["Grado"]] <- deg
+              #Guarda tabla con información de grado
+              degree.table <- data.frame(Degree = red_info[["0.92"]][["Grado"]])
+              
+              if (mutual_info){
+                if (!dir.exists(sprintf("../../results/networks/big/%s/mutual_info/degree/", TAO))){
+                 dir.create(sprintf("../../results/networks/big/%s/mutual_info/degree/", TAO))
+                 write.graph(A,sprintf("../../results/networks/big/%s/mutual_info/degree/edges_%s.txt", tao, tao),format="ncol")
+                 }
+              } else {
+                if (!dir.exists(sprintf("../../results/networks/big/%s/corr/degree/", TAO))){
+                 dir.create(sprintf("../../results/networks/big/%s/corr/degree/", TAO))
+                 write.graph(A,sprintf("../../results/networks/big/%s/corr/degree/edges_%s.txt", tao, tao),format="ncol")
+                 }
+              }
+              
           }
-          
-          #degree
-          deg <- degree(A, mode="all")
-          red_info[[as.character(tao)]][["Grado"]] <- deg
-          #Guarda tabla con información de grado
-          degree.table <- data.frame(Degree = red_info[["0.92"]][["Grado"]])
-          
-          if (mutual_info){
-            if (!dir.exists(sprintf("../../results/networks/big/%s/mutual_info/degree/", TAO))){
-             dir.create(sprintf("../../results/networks/big/%s/mutual_info/degree/", TAO))
-             write.graph(A,sprintf("../../results/networks/big/%s/mutual_info/degree/edges_%s.txt", tao, tao),format="ncol")
-             }
-          } else {
-            if (!dir.exists(sprintf("../../results/networks/big/%s/corr/degree/", TAO))){
-             dir.create(sprintf("../../results/networks/big/%s/corr/degree/", TAO))
-             write.graph(A,sprintf("../../results/networks/big/%s/corr/degree/edges_%s.txt", tao, tao),format="ncol")
-             }
-          }
+          #============================================================================================================================
           
           barplot(table(deg),las=2)
           plot(A, vertex.size=deg)
@@ -308,7 +356,8 @@ for (dir. in list.dirs("../../data/")){
           #             width=800,
           #             rescale = T)
         }
-      }
+         }
+        }
         }
         }
     }
