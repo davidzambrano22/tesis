@@ -21,7 +21,7 @@ for (dir. in list.dirs("../../data")){
           
           annot.info <- annot.info[annot.info$`Pathways` %in% categories.dataframe$`Var1`[flav.categories],"HOG_ID"]
           flav.HOGS <- data.frame(table(annot.info))
-          write.csv(flav.HOGS, "../../results/flav_HOGS/flaf.HOGS.csv")
+          write.csv(flav.HOGS, "../../results/filtered_genes/flav.HOGS.csv")
         }
       }
     }

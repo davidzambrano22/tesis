@@ -31,7 +31,7 @@ for (dir. in list.dirs("../../data/")){
           View(de.novo.table)
           
           # --Save 6000 most variable genes
-          saving.dir <- "../../results/most_variable_genes/"
+          saving.dir <- "../../results/filtered_genes/6000_most_variable_genes.csv"
           if (!file.exists(saving.dir)){
             dir.create(saving.dir)
           }

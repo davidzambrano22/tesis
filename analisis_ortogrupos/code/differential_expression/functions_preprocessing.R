@@ -81,15 +81,3 @@ get.clade.vector <- function(dataset, contrast, mode){
 }
 
 
-
-
-#Control de calidad ------------------------------------------------------
-
-# sub-functions -----------------------------------------------------------
-check.first.col <- function(dataset){
-  if (class(dataset[[1]]) != "character"){
-    warning("The first column of the dataset doesn't have HOGs names")
-  }
-  return(TRUE)
-}
-

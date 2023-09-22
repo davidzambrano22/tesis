@@ -161,7 +161,7 @@ for (dir. in list.dirs("../../data/")){
                   
                 if (isTRUE(SHRINKAGE)){
                   message("Applying shrinkage method to fitted model")
-                  resLFC0 <- lfcShrink(dds0, type = "apeglm", coe)
+                  resLFC0 <- lfcShrink(dds0, type = "apeglm")
                   #Get p values with Shrinkage
                   Padj0 <- data.frame(p=res0$padj[resLFC0$padj<0.95])
                   ggplot(Padj0, aes(x=p)) + geom_histogram(breaks = seq(0,0.95,0.05)) +
@@ -184,7 +184,11 @@ for (dir. in list.dirs("../../data/")){
               }
             }
             DEHs.dataframe <- data.frame(table(total.DEH))
-            write.csv(DEHs.dataframe, sprintf("../../results/DEGS/DEGS_denovo/%s.csv", a))
+            if (isTRUE(SHRINKAGE)){
+              write.csv(DEHs.dataframe, sprintf("../../results/DEGS/DEGS_denovo/shrinkage/%s.csv", a))
+            } else{
+              write.csv(DEHs.dataframe, sprintf("../../results/DEGS/DEGS_denovo/model/%s.csv", a))
+              }
             }
           } 
         }

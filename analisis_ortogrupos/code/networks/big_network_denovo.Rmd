@@ -4,11 +4,16 @@ Loading Libraries
 library(dplyr)
 library(corrplot)
 library(igraph)
+library(infotheo)
 source("./functions.R")
 ```
 
 
 ```{r}
+SHRINKAGE <- F
+log_transform <- F
+mutual_info <- T
+
 for (dir. in list.dirs("../../data/")){
   if (grepl("denovo$", dir.) || grepl("REFs$", dir.)){
     ### Entering potato_denovo expression files (Universidad Nacional)
@@ -18,44 +23,78 @@ for (dir. in list.dirs("../../data/")){
         if (grepl("^A_TPM", file.)){
           print(file.)
           de.novo.table <- read.delim(paste0(dir.,"/", file.), sep="\t", header=TRUE, na.strings="") %>% select("Row.Labels", starts_with("A")) 
-          # ====================== Loading gene names of interest  ================================================
-          # --Load DEGS
           
+          # ====================== Loading gene names of interest  ================================================
           # --Load genes from Falvonoids path
           message("Loading Anthocyanin annotated  HOGS...")
-          floavonoid.path.HOGS <- read.csv("../../results/flav_HOGS/flaf.HOGS.csv")$`annot.info` %>% as.vector()
+          floavonoid.path.HOGS <- read.csv("../../results/filtered_genes/flav.HOGS.csv")$`annot.info` %>% as.vector()
 
           # --Load most variable HOGS
           message("Loading most variable HOGS...")
-          most.var.HOGS.names <- read.csv("../../results/most_variable_genes/6000.csv")$`Var1` %>% as.vector()
+          most.var.HOGS.names <- read.csv("../../results/filtered_genes/6000_most_variable_genes.csv6000.csv")$`Var1` %>% as.vector()
           
-          # --Load DEGS (differentially expressed HOGS)
-          message("Loading differentially expressed HOGS...")
-          D.E.HOGS <- c()
-          HOGS.network <-  read.csv("../../results/DEGS/DEGS_cyani_total.csv")$`de.novo.DEGS` %>% as.vector() #Loading total and cyani DEGS
-          D.E.HOGS <- c(D.E.HOGS, HOGS.network) 
-          HOGS.network <-  read.csv("../../results/DEGS/DEGS_delph_peon.csv")$`de.novo.DEGS` %>% as.vector() #Loading delph and peon DEGS
-          D.E.HOGS <- c(D.E.HOGS, HOGS.network) 
-          D.E.HOGS <- names(table(D.E.HOGS)) #Define unique HOGS
-          message(cat("Number of unique differentially expressed HOGS is ==>", length(D.E.HOGS)))
+          # --Load DEHS (differentially expressed HOGS)
+          if (!SHRINKAGE){
+            message("Loading differentially expressed HOGS...")
+            D.E.HOGS <- c()
+            DEHs.Cyanidin <-  read.csv("../../results/DEGS/DEGS_denovo/model/Cyanidin.csv")$`total.DEH` %>% as.vector() 
+            DEHs.Delphinidin <-  read.csv("../../results/DEGS/DEGS_denovo/model/Delphinidin.csv")$`total.DEH` %>% as.vector()
+            DEHs.Peonidin <-  read.csv("../../results/DEGS/DEGS_denovo/model/Peonidin.csv")$`total.DEH` %>% as.vector()
+            
+            D.E.HOGS <- c(D.E.HOGS, DEHs.Cyanidin, DEHs.Delphinidin, DEHs.Peonidin) 
+            D.E.HOGS <- names(table(D.E.HOGS)) #Define unique HOGS
+            message(cat("Number of unique differentially expressed HOGS is ==>", length(D.E.HOGS)))
+            
+          } else if (SHRINKAGE){
+            message("Loading differentially expressed HOGS from SHRINKAGE workflow...")
+            D.E.HOGS <- c()
+            DEHs.Cyanidin <-  read.csv("../../results/DEGS/DEGS_denovo/shrinkage/Cyanidin.csv")$`total.DEH` %>% as.vector() 
+            DEHs.Delphinidin <-  read.csv("../../results/DEGS/DEGS_denovo/shrinkage/Delphinidin.csv")$`total.DEH` %>% as.vector()
+            DEHs.Peonidin <-  read.csv("../../results/DEGS/DEGS_denovo/shrinkage/Peonidin.csv")$`total.DEH` %>% as.vector()
+            
+            D.E.HOGS <- c(D.E.HOGS, DEHs.Cyanidin, DEHs.Delphinidin, DEHs.Peonidin) 
+            D.E.HOGS <- names(table(D.E.HOGS)) #Define unique HOGS
+            message(cat("Number of unique differentially expressed HOGS is ==>", length(D.E.HOGS)))
+          }
           
           # ====================== Obtaining expression matrix for all genes of interest ==========================
-          message("Obtaining expression matrix for all genes of interest...")
-          network.genes <- c(most.var.HOGS.names, D.E.HOGS, floavonoid.path.HOGS) # --> Enter here as a vector all genes loaded from previous step
-          expresion.data <- get.filtered.matrix(network.genes, de.novo.table)
-          rownames(expresion.data) <- expresion.data$Row.Labels #Rename expression data with gene names
-          expresion.data <- expresion.data %>% select(-Row.Labels)
-          print(cat("Filtered dataframe dimenstions are --> ", dim(expresion.data)))
+          if (log_transform){
+            message("Obtaining log 2 expression matrix for all genes of interest...")
+            network.genes <- c(most.var.HOGS.names, D.E.HOGS, floavonoid.path.HOGS) # --> Enter here as a vector all genes loaded from previous step
+            expression.data <- get.filtered.matrix(network.genes, de.novo.table)
+            rownames(expression.data) <- expression.data$Row.Labels #Rename expression data with gene names
+            expression.data <- expression.data %>% select(-Row.Labels) %>% log(base = 2)
+            print(cat("Filtered dataframe dimenstions are --> ", dim(expression.data)))
+            
+          } else {
+            message("Obtaining expression matrix for all genes of interest...")
+            network.genes <- c(most.var.HOGS.names, D.E.HOGS, floavonoid.path.HOGS) # --> Enter here as a vector all genes loaded from previous step
+            expression.data <- get.filtered.matrix(network.genes, de.novo.table)
+            rownames(expression.data) <- expression.data$Row.Labels #Rename expression data with gene names
+            expression.data <- expression.data %>% select(-Row.Labels)
+            print(cat("Filtered dataframe dimenstions are --> ", dim(expression.data))) 
+          }
 
-          # ====================== Obtaining correlation matrix for all genes of interest ==========================
-          # --Obtaining correlation matrix for all genes
-          message("Obtaining correlation matrix for all genes of interest...")
-          cor.matrix <- abs(cor(t(expresion.data), use = "pairwise.complete.obs"))
-          #Rename correlation matrix with HOGS names
-          colnames(cor.matrix) <- rownames(expresion.data)
-          rownames(cor.matrix) <- rownames(expresion.data)
-
-          
+          # ====================== Obtaining similarity matrix for all genes of interest ==========================
+          if (mutual_info){
+            # --Obtaining mutual information
+            message("Obtaining mututal information for all genes of interest...")
+            discretized.matrix <-discretize(t(expression.data), disc = "equalfreq", nbins = ceiling(1+log(ncol(expression.data))))
+            sim.matrix <- mutinformation(discretized.matrix, method = "shrink")
+            
+            S1 <- sqrt(1/exp(-2*sim.matrix))
+            S1[which(is.na(S1))] <- 0
+            hist(S1, xlim=c(0,1))
+            stop()
+            
+          } else {
+            # --Obtaining correlation matrix for all genes
+            message("Obtaining correlation matrix for all genes of interest...")
+            sim.matrix <- abs(cor(t(expression.data), use = "pairwise.complete.obs"))
+            #Rename correlation matrix with HOGS names
+            colnames(cor.matrix) <- rownames(expression.data)
+            rownames(cor.matrix) <- rownames(expression.data)
+          }
           
           # ====================== Check point for correlated genes ==========================
           # --Filtering out low correlated genes
@@ -115,8 +154,22 @@ for (dir. in list.dirs("../../data/")){
          plot(ltaos,dif[ltaos*100],t="l",xlab="Threshold",ylab="|C-Co|")
          identify(ltaos,dif[ltaos*100],n=1) / 100
         
+      ## ========================================CREATE NETWORK
+         TAO <- 0.92
+         if (!dir.exists(sprintf("../../results/networks/big/%s/", TAO))){
+           dir.create(sprintf("../../results/networks/big/%s/", TAO))
+         }
+         if (mutual_info){
+           if (!dir.exists(sprintf("../../results/networks/big/%s/mutual_info", TAO))){
+           dir.create(sprintf("../../results/networks/big/%s/mutual_info", TAO))
+           }
+         if (!mutual_info){
+           if (!dir.exists(sprintf("../../results/networks/big/%s/corr", TAO))){
+           dir.create(sprintf("../../results/networks/big/%s/corr", TAO))
+         }
+         
           red_info <- list()
-          for (tao in c(0.92)){
+          for (tao in c(TAO)){
             red_n <- 1
             #Define matriz de adyacencia:
             A=matrix(0,nrow=n,ncol=n)   
@@ -160,7 +213,7 @@ for (dir. in list.dirs("../../data/")){
           
           #Extrae clusters
           red_info[[as.character(tao)]][["Clusters"]] <- clusters(A, mode=c("weak"))
-          write.csv(data.frame(red_info[[as.character(tao)]][["Clusters"]]$membership), "../../results/Networks/big/T.92/node_genes/node_info.csv")
+          write.csv(data.frame(red_info[[as.character(tao)]][["Clusters"]]$membership), sprintf("../../results/Networks/big/%s/node_genes/node_info.csv", tao))
           
           #Tamaño de clusters
           red_info[[as.character(tao)]][["Clusters size"]] <- clusters(A, mode=c("weak"))$csize
@@ -172,14 +225,36 @@ for (dir. in list.dirs("../../data/")){
           red_info[[as.character(tao)]][["Diámetro"]] <- diameter(A)
           
           #Guarda la red
-          write.graph(A,sprintf("../../results/Networks/big/T.92/graph/edges_%s.txt", tao),format="ncol")
-      
+          if (mutual_info){
+            if (!dir.exists(sprintf("../../results/networks/big/%s/mutual_info/graph/", TAO))){
+             dir.create(sprintf("../../results/networks/big/%s/mutual_info/graph/", TAO))
+             write.graph(A,sprintf("../../results/networks/big/%s/mutual_info/graph/edges_%s.txt", tao, tao),format="ncol")
+             }
+          } else {
+            if (!dir.exists(sprintf("../../results/networks/big/%s/corr/graph/", TAO))){
+             dir.create(sprintf("../../results/networks/big/%s/corr/graph/", TAO))
+             write.graph(A,sprintf("../../results/networks/big/%s/corr/graph/edges_%s.txt", tao, tao),format="ncol")
+             }
+          }
+          
           #degree
           deg <- degree(A, mode="all")
           red_info[[as.character(tao)]][["Grado"]] <- deg
           #Guarda tabla con información de grado
           degree.table <- data.frame(Degree = red_info[["0.92"]][["Grado"]])
-          write.csv(degree.table, "../../results/Networks/big/T.92/degree/degree.csv")
+          
+          if (mutual_info){
+            if (!dir.exists(sprintf("../../results/networks/big/%s/mutual_info/degree/", TAO))){
+             dir.create(sprintf("../../results/networks/big/%s/mutual_info/degree/", TAO))
+             write.graph(A,sprintf("../../results/networks/big/%s/mutual_info/degree/edges_%s.txt", tao, tao),format="ncol")
+             }
+          } else {
+            if (!dir.exists(sprintf("../../results/networks/big/%s/corr/degree/", TAO))){
+             dir.create(sprintf("../../results/networks/big/%s/corr/degree/", TAO))
+             write.graph(A,sprintf("../../results/networks/big/%s/corr/degree/edges_%s.txt", tao, tao),format="ncol")
+             }
+          }
+          
           barplot(table(deg),las=2)
           plot(A, vertex.size=deg)
           plot.igraph(A,layout=layout_with_kk,vertex.color = 'lightblue',vertex.size=deg,edge.color="darkgreen",vertex.label.font=1,vertex.label.cex=0.6 )
@@ -215,7 +290,7 @@ for (dir. in list.dirs("../../data/")){
           # plot(seq(0.01, 0.99, 0.01),dif[seq(1, 99, 1)],t="l",xlab="Threshold",ylab="|C-Co|")
           # identify(seq(0.01, 0.99, 0.01),dif[seq(1, 99, 1)],n=1) / 100
           
-          # ===================== Getting ultimate network network ==============================================
+          # ===================== Getting ultimate network ==============================================
           # thresholds <- c(0.4) # Define the thresholds based on the previous plot
           # A <- get.network.graph(corrMatrix = cor.matrix, thresholds = thresholds)
           # 
@@ -232,9 +307,25 @@ for (dir. in list.dirs("../../data/")){
           #             height=800,
           #             width=800,
           #             rescale = T)
-          
-          
-        } else if (grepl("^N0", file.)){
+        }
+      }
+        }
+        }
+    }
+  }
+}
+
+```
+
+
+```{r}
+for (dir. in list.dirs("../../data/")){
+  if (grepl("denovo$", dir.) || grepl("REFs$", dir.)){
+    ### Entering potato_denovo expression files (Universidad Nacional)
+    if (grepl("denovo$", dir.)){
+      print(dir.)
+      for (file. in list.files(dir.)){
+        if (grepl("^N0", file.)){
           print(file.)
           annot.file <- read.delim(paste0(dir.,"/", file.), sep="\t", header=TRUE, na.strings="")
           #View(annot.file)
@@ -372,6 +463,7 @@ for (dir. in list.dirs("../../data/")){
       }
     }
   }
+}
 ```
 
 
