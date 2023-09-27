@@ -24,7 +24,7 @@ source("./functions_diffExp.R")
 ```
 
 ```{r}
-SHRINKAGE <- T
+SHRINKAGE <- F
 clade.datatype <- "clade"
 
 for (dir. in list.dirs("../../data/")){
@@ -65,7 +65,7 @@ for (dir. in list.dirs("../../data/")){
           # ============================== 1.Loading data for de novo dataset accesions
           accesions.info <- read.csv("../../data/potato_denovo/accesiones.csv")
           ## Define anthocyanin names
-          anthocyanin.names <- c("Delphinidin","Peonidin","Cyanidin","Total.anthocyanins")
+          anthocyanin.names <- c("Pelargonidin","Petunidin","Delphinidin","Peonidin","Cyanidin")
         
           ## Get accesion names present in expression data
           accesion_names <- names(de.novo.table)[2:dim(de.novo.table)[2]]
@@ -104,9 +104,9 @@ for (dir. in list.dirs("../../data/")){
               # =========================== Create coldata
               colData. <- data.frame(contrast=as.factor(contrast.vector), clado=as.factor(clade.vector))
               
-              
               # =========================== Rearrange expression dataframe
               expression.data <- de.novo.table[, c("Row.Labels", below_quantile, above_quantile)]
+              
               # =========================== Create Deseq2 object
               dds0 <- DESeq2::DESeqDataSetFromMatrix(countData = expression.data[2:dim(expression.data)[2]],
                                                      colData = colData.,
@@ -155,7 +155,7 @@ for (dir. in list.dirs("../../data/")){
                 dds0 <- DESeq(dds0, test="LRT", reduced=~1) #prueba de verosimilitud compara ajuste actual vs modelo nulo
                 #dds0 <- DESeq(dds0, test="Wald")#prueba de Wald solo para dos condiciones
                 res0 <- results(dds0)
-                resultsNames(dds0) 
+                resultsNames(dds0)
                 #plotDispEsts(dds0) # estimaciones dispersiones  
                 #plotMA(dds0)
                   

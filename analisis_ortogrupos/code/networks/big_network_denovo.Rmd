@@ -11,7 +11,7 @@ source("./functions.R")
 
 ```{r}
 SHRINKAGE <- F
-log_transform <- T
+log_transform <- F
 mutual_info <- F
 
 for (dir. in list.dirs("../../data/")){
@@ -98,8 +98,8 @@ for (dir. in list.dirs("../../data/")){
             message("Obtaining correlation matrix for all genes of interest...")
             sim.matrix <- abs(cor(t(expression.data), use = "pairwise.complete.obs"))
             #Rename correlation matrix with HOGS names
-            colnames(cor.matrix) <- rownames(expression.data)
-            rownames(cor.matrix) <- rownames(expression.data)
+            colnames(sim.matrix) <- rownames(expression.data)
+            rownames(sim.matrix) <- rownames(expression.data)
             stop("Checking corr matrix")
           }
           
@@ -113,7 +113,7 @@ for (dir. in list.dirs("../../data/")){
           # net.coefficients <- get.network.coefficients(cor.matrix) #Get clustering coefficients
           # stop("Stop for mantainence")
           
-          n <- nrow(cor.matrix)
+          n <- nrow(sim.matrix)
           C <- matrix(nrow = n, ncol = 100)
           K <- matrix(nrow=n, ncol=100)
           ltaos <- seq(0.01,0.99,by=0.01)
@@ -124,8 +124,8 @@ for (dir. in list.dirs("../../data/")){
             A=matrix(0,nrow=n,ncol=n)    
             ##Completa la matriz de adyacencia usando la funci?n de adyacencia:
             for(i in 1:n){  
-              A[which(cor.matrix[,i]>=tao),i]<-1
-              A[which(cor.matrix[,i]<tao),i]<-0
+              A[which(sim.matrix[,i]>=tao),i]<-1
+              A[which(sim.matrix[,i]<tao),i]<-0
             }
             ##Transforma la matriz A en un objeto igraph:
             A=graph.adjacency(A,mode="undirected",diag=FALSE)
@@ -184,12 +184,12 @@ for (dir. in list.dirs("../../data/")){
             #Completa la matriz de adyacencia usando la función de adyacencia:
             for(i in 1:n)
             {  
-              A[which(cor.matrix[,i]>=tao),i]<-1
-              A[which(cor.matrix[,i]<tao),i]<-0
+              A[which(sim.matrix[,i]>=tao),i]<-1
+              A[which(sim.matrix[,i]<tao),i]<-0
             }
             
               #Trabajando con los nombres de los genes
-              colnames(A) <- rownames(A) <- rownames(cor.matrix)
+              colnames(A) <- rownames(A) <- rownames(sim.matrix)
               
               #Convierte la diagonal en ceros (red no dirigida):
               diag(A)<-0
