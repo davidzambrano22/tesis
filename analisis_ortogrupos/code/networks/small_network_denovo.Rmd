@@ -4,14 +4,14 @@ Loading Libraries
 library(dplyr)
 library(corrplot)
 library(igraph)
+library(infotheo)
 source("./functions.R")
 ```
 
 
 ```{r}
-SHRINKAGE <- F
 log_transform <- F
-mutual_info <- F
+mutual_info <- T
 
 for (dir. in list.dirs("../../data/")){
   if (grepl("denovo$", dir.) || grepl("REFs$", dir.)){
@@ -34,50 +34,38 @@ for (dir. in list.dirs("../../data/")){
           most.var.HOGS.names <- read.csv("../../results/filtered_genes/6000_most_variable_genes.csv6000.csv")$`Var1` %>% as.vector()
           
           # --Load DEHS (differentially expressed HOGS)
-          if (!SHRINKAGE){
-            message("Loading differentially expressed HOGS...")
-            D.E.HOGS <- c()
-            DEHs.Cyanidin <-  read.csv("../../results/DEGS/DEGS_denovo/model/Cyanidin.csv")$`total.DEH` %>% as.vector() 
-            DEHs.Delphinidin <-  read.csv("../../results/DEGS/DEGS_denovo/model/Delphinidin.csv")$`total.DEH` %>% as.vector()
-            DEHs.Peonidin <-  read.csv("../../results/DEGS/DEGS_denovo/model/Peonidin.csv")$`total.DEH` %>% as.vector()
-            DEHs.Petunidin <-  read.csv("../../results/DEGS/DEGS_denovo/model/Petunidin.csv")$`total.DEH` %>% as.vector()
-            DEHs.Pelargonidin <-  read.csv("../../results/DEGS/DEGS_denovo/model/Pelargonidin.csv")$`total.DEH` %>% as.vector()
-            
-            #Create vector with all DEHs names
-            D.E.HOGS <- c(D.E.HOGS, DEHs.Cyanidin, DEHs.Delphinidin, DEHs.Peonidin, DEHs.Petunidin, DEHs.Pelargonidin)
-            D.E.HOGS <- names(table(D.E.HOGS)) #Define unique HOGS
-            message(cat("Number of unique differentially expressed HOGS is ==>", length(D.E.HOGS)))
-    
-          } else if (SHRINKAGE){
-            message("Loading differentially expressed HOGS from SHRINKAGE workflow...")
-            D.E.HOGS <- c()
-            DEHs.Cyanidin <-  read.csv("../../results/DEGS/DEGS_denovo/shrinkage/Cyanidin.csv")$`total.DEH` %>% as.vector() 
-            DEHs.Delphinidin <-  read.csv("../../results/DEGS/DEGS_denovo/shrinkage/Delphinidin.csv")$`total.DEH` %>% as.vector()
-            DEHs.Peonidin <-  read.csv("../../results/DEGS/DEGS_denovo/shrinkage/Peonidin.csv")$`total.DEH` %>% as.vector()
-            
-            D.E.HOGS <- c(D.E.HOGS, DEHs.Cyanidin, DEHs.Delphinidin, DEHs.Peonidin) 
-            D.E.HOGS <- names(table(D.E.HOGS)) #Define unique HOGS
-            message(cat("Number of unique differentially expressed HOGS is ==>", length(D.E.HOGS)))
-          }
+          message("Loading differentially expressed HOGS...")
+          D.E.HOGS <- c()
+          DEHs.Cyanidin <-  read.csv("../../results/DEGS/DEGS_denovo/model/Cyanidin.csv")$`total.DEH` %>% as.vector() 
+          DEHs.Delphinidin <-  read.csv("../../results/DEGS/DEGS_denovo/model/Delphinidin.csv")$`total.DEH` %>% as.vector()
+          DEHs.Peonidin <-  read.csv("../../results/DEGS/DEGS_denovo/model/Peonidin.csv")$`total.DEH` %>% as.vector()
+          DEHs.Petunidin <-  read.csv("../../results/DEGS/DEGS_denovo/model/Petunidin.csv")$`total.DEH` %>% as.vector()
+          DEHs.Pelargonidin <-  read.csv("../../results/DEGS/DEGS_denovo/model/Pelargonidin.csv")$`total.DEH` %>% as.vector()
           
-          # =========================== Obtaining expression matrix for all genes of interest =====================================================
-          #========================================================================================================================================
+          #Create vector with all DEHs names
+          D.E.HOGS <- c(D.E.HOGS, DEHs.Cyanidin, DEHs.Delphinidin, DEHs.Peonidin, DEHs.Petunidin, DEHs.Pelargonidin)
+          D.E.HOGS <- names(table(D.E.HOGS)) #Define unique HOGS
+          message(cat("Number of unique differentially expressed HOGS is ==>", length(D.E.HOGS)))
+    
+          
+          # =========================== Obtaining expression matrix for all genes of interest ============================
+          #===============================================================================================================
+          
+          network.genes <- c(D.E.HOGS, floavonoid.path.HOGS) # --> Enter here as a vector all genes loaded from previous step
+          
           if (log_transform){
             message("Obtaining log 2 expression matrix for all genes of interest...")
-            network.genes <- c(most.var.HOGS.names, D.E.HOGS, floavonoid.path.HOGS) # --> Enter here as a vector all genes loaded from previous step
-            expression.data <- get.filtered.matrix(names(table(c(most.var.HOGS.names, D.E.HOGS, floavonoid.path.HOGS))), de.novo.table)
-            #stop("Determining expression data matrix properties")
-            #View(expression.data)
-            rownames(expression.data) <- expression.data$Row.Labels #Rename expression data with gene names
+            expression.data <- get.filtered.matrix(names(table(network.genes)), de.novo.table)
+            hog.names <- expression.data$Row.Labels
+            rownames(expression.data) <- hog.names #Rename expression data with gene names
             expression.data <- expression.data %>% select(-Row.Labels) %>% log(base = 2)
-            View(expression.data)
-            #stop("Determining log matrix properties")
+            expression.data <-  data.frame(lapply(expression.data, function(x) ifelse(x == -Inf, 0, x)))
+            rownames(expression.data) <- hog.names
             print(cat("Filtered dataframe dimenstions are --> ", dim(expression.data)))
           } 
           
           else {
-            message("Obtaining expression matrix for all genes of interest...")
-            network.genes <- c(D.E.HOGS, floavonoid.path.HOGS) # --> Enter here as a vector all genes loaded from previous step
+            message("Obtaining raw expression matrix for all genes of interest...")
             expression.data <- get.filtered.matrix(names(table(network.genes)), de.novo.table)
             rownames(expression.data) <- expression.data$Row.Labels #Rename expression data with gene names
             expression.data <- expression.data %>% select(-Row.Labels)
@@ -85,19 +73,24 @@ for (dir. in list.dirs("../../data/")){
           }
 
           # ====================== Obtaining similarity matrix for all genes of interest ==========================
+          #========================================================================================================
           if (mutual_info){
             # --Obtaining mutual information
             message("Obtaining mututal information for all genes of interest...")
             discretized.matrix <-discretize(t(expression.data), disc = "equalfreq", nbins = ceiling(1+log(ncol(expression.data))))
-            sim.matrix <- mutinformation(discretized.matrix, method = "shrink")
+            sim.matrix <- mutinformation(discretized.matrix, method = "emp")
+            
+            #Rename correlation matrix with HOGS names
+            colnames(sim.matrix) <- rownames(expression.data)
+            rownames(sim.matrix) <- rownames(expression.data)
+            
+            View(sim.matrix)
+            # S1 <- sqrt(1/exp(-2*sim.matrix))
+            # S1[which(is.na(S1))] <- 0
+            # hist(S1, xlim=c(0,1))
             
             
-            S1 <- sqrt(1/exp(-2*sim.matrix))
-            S1[which(is.na(S1))] <- 0
-            hist(S1, xlim=c(0,1))
-            stop()
-            
-          } else {
+          } else if (!mutual_info){
             # --Obtaining correlation matrix for all genes
             message("Obtaining correlation matrix for all genes of interest...")
             sim.matrix <- abs(cor(t(expression.data), use = "pairwise.complete.obs"))
@@ -158,9 +151,10 @@ for (dir. in list.dirs("../../data/")){
             if(kn==0){Cr[i]=0}#Si no hay nodos conectados: Cr=0
           }
          
-         hist(K[,99],xlab = "Degree", main = "Threshold 0.99") ##### Plot de grado
-         plot(ltaos,abs(Cr-Co)[ltaos*100],t="l",xlab="Threshold",ylab="|C-Co|")
+         # hist(K[,99],xlab = "Degree", main = "Threshold 0.99") ##### Plot de grado
+         # plot(ltaos,abs(Cr-Co)[ltaos*100],t="l",xlab="Threshold",ylab="|C-Co|")
          
+         stop("Determine TAO value")
          dif=runmed(abs(Cr-Co),k=3,endrule="constant")[1:100]
          plot(ltaos,dif[ltaos*100],t="l",xlab="Threshold",ylab="|C-Co|")
          identify(ltaos,dif[ltaos*100],n=1) / 100
@@ -178,28 +172,10 @@ for (dir. in list.dirs("../../data/")){
 
 ```{r}
 ## ========================================CREATE NETWORK
+TAO <- 0.71
 
-# ====================== Create directories ===================
-if (!dir.exists(sprintf("../../results/networks/small/%s/", TAO))){
- dir.create(sprintf("../../results/networks/small/%s/", TAO))
-}
 
-if (mutual_info){
- if (!dir.exists(sprintf("../../results/networks/small/%s/mutual_info", TAO))){
- dir.create(sprintf("../../results/networks/small/%s/mutual_info", TAO))
- }
-  
-} else{
- if (!dir.exists(sprintf("../../results/networks/small/%s/corr/", TAO))){
-   dir.create(sprintf("../../results/networks/small/%s/corr/", TAO))
- }
-  }
-#===============================================================
-
-TAO <- 0.77
-red_info <- list()
-for (tao in c(TAO)){
-  red_n <- 1
+for (tao in TAO){
   #Define matriz de adyacencia:
   A=matrix(0,nrow=n,ncol=n)   
 
@@ -223,135 +199,188 @@ for (tao in c(TAO)){
     dim(A)
     
     A=graph.adjacency(A,mode="undirected",add.colnames=NULL,diag=FALSE)
-    #plot(A)
+    plot(A)
     
     vertex_colors <- rep("lightblue", 1181)
     vertex_colors[1:924] <- "red"
 
     plot.igraph(A,layout=layout_with_kk,vertex.color = vertex_colors,vertex.size=5,edge.color="darkgreen",vertex.label.font=1,vertex.label.cex=0.6, height=800, width=800, rescale = T)
+    
+     ## ========================================================== NETWORK ANALYSIS ======================================================
+     ## ==================================================================================================================================
+    red_info <- list()
+   
+    #========================================================== LOG TRANSFORMED ============================================================
+    if (log_transform){
+          
+    #save graph object in the list info
+    red_info[["log"]][[as.character(tao)]][["A"]] <- A
+    
+    #Número de nodos
+    red_info[["log"]][[as.character(tao)]][["Length"]] <-  length(V(A))
+    
+    #=============================GET CLUSTERS ==============================
+    red_info[["log"]][[as.character(tao)]][["Clusters"]] <- clusters(A, mode=c("weak"))
+    # ======== Save them ========
+    if (!mutual_info){
+        saving.dir <- sprintf("../../results/networks/small/log_transformed/corr/%s/clusters/", tao)
+        tryCatch({write.csv(data.frame(red_info[["log"]][[as.character(tao)]][["Clusters"]]$membership), paste0(saving.dir,"clusters.csv"))},
+                 error = function(e) {create.dir(saving.dir)
+                   write.csv(data.frame(red_info[["log"]][[as.character(tao)]][["Clusters"]]$membership), paste0(saving.dir,"clusters.csv"))})
+        
+      } else if (mutual_info){
+        saving.dir <- sprintf("../../results/networks/small/log_transformed/mutual_info/%s/clusters/", tao)
+        tryCatch({write.csv(data.frame(red_info[["log"]][[as.character(tao)]][["Clusters"]]$membership), paste0(saving.dir,"clusters.csv"))},
+                 error = function(e) {create.dir(saving.dir)
+                   write.csv(data.frame(red_info[["log"]][[as.character(tao)]][["Clusters"]]$membership), paste0(saving.dir,"clusters.csv"))})
+      }
+      
+      
+      #Tamaño de clusters
+      red_info[["log"]][[as.character(tao)]][["Clusters size"]] <- clusters(A, mode=c("weak"))$csize
+      
+      #Transitividad
+      red_info[["log"]][[as.character(tao)]][["Transitividad"]] <- transitivity(A, type="global") 
+      
+      #Diámetro
+      red_info[["log"]][[as.character(tao)]][["Diameter"]] <- diameter(A)
+      
+    
+      
+       #============= SAVE GRAPH
+        if (mutual_info){
+          saving.dir <- sprintf("../../results/networks/small/log_transformed/mutual_info/%s/graph/", tao)
+          tryCatch({write.graph(A, paste0(saving.dir, "graph.txt"),format="ncol")},
+               error = function(e) {create.dir(saving.dir)
+                 write.graph(A, paste0(saving.dir, "graph.txt"),format="ncol")})
+          
+        } else if (!mutual_info) {
+           saving.dir <- sprintf("../../results/networks/small/log_transformed/corr/%s/graph/", tao)
+          tryCatch({write.graph(A, paste0(saving.dir, "graph.txt"),format="ncol")},
+               error = function(e) {create.dir(saving.dir)
+                 write.graph(A, paste0(saving.dir, "graph.txt"),format="ncol")})
+        }
+        
+        #============= DEGREE
+        deg <- degree(A, mode="all")
+        red_info[["log"]][[as.character(tao)]][["Degree"]] <- deg
+        #Guarda tabla con información de grado
+        degree.table <- data.frame(Degree = red_info[["log"]][[as.character(tao)]][["Degree"]])
+        
+        if (mutual_info){
+          saving.dir <- sprintf("../../results/networks/small/log_transformed/mutual_info/%s/degree/", tao)
+          tryCatch({write.csv(degree.table, paste0(saving.dir, "degree.csv"))},
+               error = function(e) {create.dir(saving.dir)
+                 write.csv(degree.table, paste0(saving.dir, "degree.csv"))})
+           
+           
+        } else if (!mutual_info){
+          saving.dir <- sprintf("../../results/networks/small/log_transformed/corr/%s/degree/", tao)
+          tryCatch({write.csv(degree.table, paste0(saving.dir, "degree.csv"))},
+               error = function(e) {create.dir(saving.dir)
+                 write.csv(degree.table, paste0(saving.dir, "degree.csv"))})
+        }
+      #========================================================== NO LOG TRANSFORMED ==========================================================
+    } else if(!log_transform) { 
+      
+      #save graph object in the list info
+    red_info[["raw"]][[as.character(tao)]][["A"]] <- A
+    
+    #Número de nodos
+    red_info[["raw"]][[as.character(tao)]][["Length"]] <-  length(V(A))
+    
+    #=============================GET CLUSTERS ==============================
+    red_info[["raw"]][[as.character(tao)]][["Clusters"]] <- clusters(A, mode=c("weak"))
+    # ======== Save them ========
+    if (!mutual_info){
+        saving.dir <- sprintf("../../results/networks/small/raw/corr/%s/clusters/", tao)
+        tryCatch({write.csv(data.frame(red_info[["raw"]][[as.character(tao)]][["Clusters"]]$membership), paste0(saving.dir,"clusters.csv"))},
+                 error = function(e) {create.dir(saving.dir)
+                   write.csv(data.frame(red_info[["raw"]][[as.character(tao)]][["Clusters"]]$membership), paste0(saving.dir,"clusters.csv"))})
+        
+      } else if (mutual_info){
+        saving.dir <- sprintf("../../results/networks/small/raw/mutual_info/%s/clusters", tao)
+        tryCatch({write.csv(data.frame(red_info[["raw"]][[as.character(tao)]][["Clusters"]]$membership), paste0(saving.dir,"clusters.csv"))},
+                 error = function(e) {create.dir(saving.dir)
+                   write.csv(data.frame(red_info[["raw"]][[as.character(tao)]][["Clusters"]]$membership), paste0(saving.dir,"clusters.csv"))})
+      }
+      
+      
+      #Tamaño de clusters
+      red_info[["raw"]][[as.character(tao)]][["Clusters size"]] <- clusters(A, mode=c("weak"))$csize
+      
+      #Transitividad
+      red_info[["raw"]][[as.character(tao)]][["Transitividad"]] <- transitivity(A, type="global") 
+      
+      #Diámetro
+      red_info[["raw"]][[as.character(tao)]][["Diameter"]] <- diameter(A)
+      
+      #============= SAVE GRAPH
+        if (mutual_info){
+          saving.dir <- sprintf("../../results/networks/small/raw/mutual_info/%s/graph/", tao)
+          tryCatch({write.graph(A, paste0(saving.dir, "graph.txt"),format="ncol")},
+               error = function(e) {create.dir(saving.dir)
+                 write.graph(A, paste0(saving.dir, "graph.txt"),format="ncol")})
+          
+        } else if (!mutual_info) {
+           saving.dir <- sprintf("../../results/networks/small/raw/corr/%s/graph/", tao)
+          tryCatch({write.graph(A, paste0(saving.dir, "graph.txt"),format="ncol")},
+               error = function(e) {create.dir(saving.dir)
+                 write.graph(A, paste0(saving.dir, "graph.txt"),format="ncol")})
+        }
+        
+        #============= DEGREE
+        deg <- degree(A, mode="all")
+        red_info[["log"]][[as.character(tao)]][["Degree"]] <- deg
+        #Guarda tabla con información de grado
+        degree.table <- data.frame(Degree = red_info[["log"]][[as.character(tao)]][["Degree"]])
+        
+        if (mutual_info){
+          saving.dir <- sprintf("../../results/networks/small/raw/mutual_info/%s/degree/", tao)
+          tryCatch({write.csv(degree.table, paste0(saving.dir, "degree.csv"))},
+               error = function(e) {create.dir(saving.dir)
+                 write.csv(degree.table, paste0(saving.dir, "degree.csv"))})
+           
+           
+        } else if (!mutual_info){
+          saving.dir <- sprintf("../../results/networks/small/raw/corr/%s/degree/", tao)
+          tryCatch({write.csv(degree.table, paste0(saving.dir, "degree.csv"))},
+               error = function(e) {create.dir(saving.dir)
+                 write.csv(degree.table, paste0(saving.dir, "degree.csv"))})
+        }
+    }
+    #============================================================================================================================
+    
+    barplot(table(deg),las=2)
+    plot(A, vertex.size=deg)
+    plot.igraph(A,layout=layout_with_kk,vertex.color = 'lightblue',vertex.size=deg,edge.color="darkgreen",vertex.label.font=1,vertex.label.cex=0.6 )
+    
+    hist(deg, breaks=1:vcount(A)-1, main="Histogram of node degree")
+    
+    
+    deg.dist <- degree_distribution(A, cumulative=T, mode="all")
+    plot( x=0:max(deg), y=1-deg.dist, pch=19, cex=1.2, col="orange", 
+          xlab="Degree", ylab="Cumulative Frequency")
+    
+    #Guarda información de centralización
+    red_info[[as.character(tao)]][["centr_degree"]] <- centr_degree(A, mode="in", normalized=T)
+    # cd<-centr_degree(A, mode="in", normalized=T)
+    # cd$centralization
+    # cd$res
+    
+    #Eigen centrality
+    red_info[[as.character(tao)]][["eigen_centrality"]] <- eigen_centrality(A, directed=F, weights=NA)
+    # eigc<-eigen_centrality(A, directed=F, weights=NA)
+    
+    #Hub score
+    red_info[[as.character(tao)]][["hub_score"]] <- hub_score(A, weights=NA)$vector
+    # hs <- hub_score(A, weights=NA)$vector
+    # hs
+    # sort(hs,decreasing = TRUE)
+    # sort(deg,decreasing = TRUE)
 }
 
-#Análisis de red
 
-#save graph object in the list info
-red_info[[as.character(tao)]][["A"]] <- A
-
-#Número de nodos
-red_info[[as.character(tao)]][["Length"]] <-  length(V(A))
-
-#Extrae clusters
-red_info[[as.character(tao)]][["Clusters"]] <- clusters(A, mode=c("weak"))
-write.csv(data.frame(red_info[[as.character(tao)]][["Clusters"]]$membership), sprintf("../../results/networks/small/%s/node_info.csv", tao))
-
-#Tamaño de clusters
-red_info[[as.character(tao)]][["Clusters size"]] <- clusters(A, mode=c("weak"))$csize
-
-#Transitividad
-red_info[[as.character(tao)]][["Transitividad"]] <- transitivity(A, type="global") 
-
-#Diámetro
-red_info[[as.character(tao)]][["Diametro"]] <- diameter(A)
-
-
-## ==================== SAVE NETWORK AND INFORMATION ABOUT DEGREE DEPENDING ON THE NATURE OF DATA (LOG OR NOT) =======================
-if (log_transform){
-  if (!dir.exists("../../results/networks/small/log_transformed")){
-    dir.create("../../results/networks/small/log_transformed")
-  }
-   #============= GRAPH
-    if (mutual_info){
-      if (!dir.exists(sprintf("../../results/networks/small/log_transformed/%s/mutual_info/graph/", TAO))){
-       dir.create(sprintf("../../results/networks/small/log_transformed/%s/mutual_info/graph/", TAO))
-       write.graph(A,sprintf("../../results/networks/small/log_transformed/%s/mutual_info/graph/edges_%s.txt", tao, tao),format="ncol")
-       }
-    } else {
-      if (!dir.exists(sprintf("../../results/networks/small/log_transformed/%s/corr/graph/", TAO))){
-       dir.create(sprintf("../../results/networks/big/small/log_transformed/corr/graph/", TAO))
-       write.graph(A,sprintf("../../results/networks/small/log_transformed/%s/corr/graph/edges_%s.txt", tao, tao),format="ncol")
-       }
-    }
-    
-    #============= DEGREE
-    deg <- degree(A, mode="all")
-    red_info[[as.character(tao)]][["Grado"]] <- deg
-    #Guarda tabla con información de grado
-    degree.table <- data.frame(Degree = red_info[["0.92"]][["Grado"]])
-    
-    if (mutual_info){
-      if (!dir.exists(sprintf("../../results/networks/small/log_transformed/%s/mutual_info/degree/", TAO))){
-       dir.create(sprintf("../../results/networks/small/log_transformed/%s/mutual_info/degree/", TAO))
-       write.csv(degree.table, sprintf("../../results/networks/small/log_transformed/%s/mutual_info/degree/degree.csv", tao, tao),format="ncol")
-       }
-    } else {
-      if (!dir.exists(sprintf("../../results/networks/small/log_transformed/%s/corr/degree/", TAO))){
-       dir.create(sprintf("../../results/networks/small/log_transformed/%s/corr/degree/", TAO))
-       write.csv(degree.table, sprintf("../../results/networks/small/log_transformed/%s/corr/degree/degree.csv", tao),format="ncol")
-       }
-    }
-  
-  
-} else{ # No LOG transform
-    #============= GRAPH
-    if (mutual_info){
-      if (!dir.exists(sprintf("../../results/networks/small/%s/mutual_info/graph/", TAO))){
-       dir.create(sprintf("../../results/networks/small/%s/mutual_info/graph/", TAO))
-       write.graph(A,sprintf("../../results/networks/small/%s/mutual_info/graph/edges_%s.txt", tao, tao),format="ncol")
-       }
-    } else {
-      if (!dir.exists(sprintf("../../results/networks/small/%s/corr/graph/", TAO))){
-       dir.create(sprintf("../../results/networks/small/%s/corr/graph/", TAO))
-       write.graph(A,sprintf("../../results/networks/small/%s/corr/graph/edges_%s.txt", tao, tao),format="ncol")
-       }
-    }
-    
-    #============= DEGREE
-    deg <- degree(A, mode="all")
-    red_info[[as.character(tao)]][["Grado"]] <- deg
-    #Guarda tabla con información de grado
-    degree.table <- data.frame(Degree = red_info[["0.92"]][["Grado"]])
-    
-    if (mutual_info){
-      if (!dir.exists(sprintf("../../results/networks/small/%s/mutual_info/degree/", TAO))){
-       dir.create(sprintf("../../results/networks/small/%s/mutual_info/degree/", TAO))
-       write.csv(degree.table, sprintf("../../results/networks/small/%s/mutual_info/degree/degree.csv", tao, tao),format="ncol")
-       }
-    } else {
-      if (!dir.exists(sprintf("../../results/networks/small/%s/corr/degree/", TAO))){
-       dir.create(sprintf("../../results/networks/small/%s/corr/degree/", TAO))
-       write.csv(degree.table, sprintf("../../results/networks/small/%s/corr/degree/degree.csv", tao),format="ncol")
-       }
-    }
-    
-}
-#============================================================================================================================
-
-barplot(table(deg),las=2)
-plot(A, vertex.size=deg)
-plot.igraph(A,layout=layout_with_kk,vertex.color = 'lightblue',vertex.size=deg,edge.color="darkgreen",vertex.label.font=1,vertex.label.cex=0.6 )
-
-hist(deg, breaks=1:vcount(A)-1, main="Histogram of node degree")
-
-
-deg.dist <- degree_distribution(A, cumulative=T, mode="all")
-plot( x=0:max(deg), y=1-deg.dist, pch=19, cex=1.2, col="orange", 
-      xlab="Degree", ylab="Cumulative Frequency")
-
-#Guarda información de centralización
-red_info[[as.character(tao)]][["centr_degree"]] <- centr_degree(A, mode="in", normalized=T)
-# cd<-centr_degree(A, mode="in", normalized=T)
-# cd$centralization
-# cd$res
-
-#Eigen centrality
-red_info[[as.character(tao)]][["eigen_centrality"]] <- eigen_centrality(A, directed=F, weights=NA)
-# eigc<-eigen_centrality(A, directed=F, weights=NA)
-
-#Hub score
-red_info[[as.character(tao)]][["hub_score"]] <- hub_score(A, weights=NA)$vector
-# hs <- hub_score(A, weights=NA)$vector
-# hs
-# sort(hs,decreasing = TRUE)
-# sort(deg,decreasing = TRUE)
 
 ```
 

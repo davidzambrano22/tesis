@@ -55,7 +55,7 @@ for (dir. in list.dirs("../../data/")){
           # ====================== Obtaining expression matrix for all genes of interest ==========================
           if (log_transform){
             message("Obtaining log 2 expression matrix for all genes of interest...")
-            network.genes <- c(most.var.HOGS.names, D.E.HOGS, floavonoid.path.HOGS) # --> Enter here as a vector all genes loaded from previous step
+            network.genes <- c(D.E.HOGS, floavonoid.path.HOGS) # --> Enter here as a vector all genes loaded from previous step
             expression.data <- get.filtered.matrix(names(table(c(most.var.HOGS.names, D.E.HOGS, floavonoid.path.HOGS))), de.novo.table)
             #stop("Determining expression data matrix properties")
             #View(expression.data)
