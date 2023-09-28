@@ -5,4 +5,6 @@ analisis_ortogrupos/.RData
 analisis_ortogrupos/.RData.Ruserdata
 analisis_ortogrupos/data/
 analisis_ortogrupos/results/
+analisis_ortogrupos/code/differential_expression/clustering_diff_expression.Rmd
+analisis_ortogrupos/code/differential_expression/functions_clustering.R
 .Rproj.user

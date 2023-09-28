@@ -10,7 +10,7 @@ source("./functions.R")
 
 
 ```{r}
-log_transform <- F
+log_transform <- T
 mutual_info <- F
 
 for (dir. in list.dirs("../../data/")){
@@ -84,6 +84,10 @@ for (dir. in list.dirs("../../data/")){
             colnames(sim.matrix) <- rownames(expression.data)
             rownames(sim.matrix) <- rownames(expression.data)
             
+            saving.dir <- "../../results/networks/big/log_transformed/mutual_info/"
+            tryCatch({write.csv(sim.matrix, paste0(saving.dir,"sim_matrix"))},
+                 error = function(e) {create.dir(saving.dir)
+                   write.csv(sim.matrix, paste0(saving.dir,"sim_matrix"))})
             View(sim.matrix)
             # S1 <- sqrt(1/exp(-2*sim.matrix))
             # S1[which(is.na(S1))] <- 0
@@ -100,17 +104,18 @@ for (dir. in list.dirs("../../data/")){
             # stop("Checking corr matrix")
           }
           
+          
           # ====================== Check point for correlated genes ==========================
           # --Filtering out low correlated genes
-          High.corr.genes <- get.highCorr.genes(cor.matrix = sim.matrix, threshold = 0.5)
-          
-          stop("Stopping code for mantenaince")
+          # High.corr.genes <- get.highCorr.genes(cor.matrix = sim.matrix, threshold = 0.7)
+          # # High.corr.genes <- getHighcorGenes(expression.data, 0.5)
+          # stop("Stopping code for mantenaince")
 
           # ===================== Determining the best threshold to work with on getting the network =============
           message("Getting clustering coefficients...")
           # net.coefficients <- get.network.coefficients(cor.matrix) #Get clustering coefficients
           # stop("Stop for mantainence")
-          
+
           n <- nrow(sim.matrix)
           C <- matrix(nrow = n, ncol = 100)
           K <- matrix(nrow=n, ncol=100)
@@ -170,7 +175,7 @@ for (dir. in list.dirs("../../data/")){
 
 ```{r}
 ## ========================================CREATE NETWORK
-TAO <- 0.71
+TAO <- 0.61
 
 
 for (tao in TAO){
@@ -202,7 +207,7 @@ for (tao in TAO){
     vertex_colors <- rep("lightblue", 1181)
     vertex_colors[1:924] <- "red"
 
-    plot.igraph(A,layout=layout_with_kk,vertex.color = vertex_colors,vertex.size=5,edge.color="darkgreen",vertex.label.font=1,vertex.label.cex=0.6, height=800, width=800, rescale = T)
+    # plot.igraph(A,layout=layout_with_kk,vertex.color = vertex_colors,vertex.size=5,edge.color="darkgreen",vertex.label.font=1,vertex.label.cex=0.6, height=800, width=800, rescale = T)
     
      ## ========================================================== NETWORK ANALYSIS ======================================================
      ## ==================================================================================================================================
@@ -350,8 +355,8 @@ for (tao in TAO){
     #============================================================================================================================
     
     barplot(table(deg),las=2)
-    plot(A, vertex.size=deg)
-    plot.igraph(A,layout=layout_with_kk,vertex.color = 'lightblue',vertex.size=deg,edge.color="darkgreen",vertex.label.font=1,vertex.label.cex=0.6 )
+    # plot(A, vertex.size=deg)
+    # plot.igraph(A,layout=layout_with_kk,vertex.color = 'lightblue',vertex.size=deg,edge.color="darkgreen",vertex.label.font=1,vertex.label.cex=0.6 )
     
     hist(deg, breaks=1:vcount(A)-1, main="Histogram of node degree")
     
