@@ -391,151 +391,31 @@ for (tao in TAO){
 
 
 ```{r}
-for (dir. in list.dirs("../../data/")){
-  if (grepl("denovo$", dir.) || grepl("REFs$", dir.)){
-    ### Entering potato_denovo expression files (Universidad Nacional)
-    if (grepl("denovo$", dir.)){
-      print(dir.)
-      for (file. in list.files(dir.)){
-        if (grepl("^N0", file.)){
-          print(file.)
-          annot.file <- read.delim(paste0(dir.,"/", file.), sep="\t", header=TRUE, na.strings="")
-          #View(annot.file)
-          
-          for (net.file in list.files("../../results/Networks/big/")){
-            message(sprintf("Working with %s folder...", net.file))
-          # ================================== Identify degree genes in each HOG =========================================
-          # ================================= By degree
-          highest.degree.HOGS <- read.csv("../../results/Networks/big/T.92/degree/degree.csv") %>% arrange(desc(Degree))
-          hist(highest.degree.HOGS$Degree)
-          #View(highest.degree.HOGS)
-          
-          
-          # ================================ By Node
-          node.dataframe <- read.csv("../../results/Networks/big/T.92/node_genes/node_info.csv")
-          for (node in names(table(node.dataframe[,2]))){
-            print(node)
-            HOG.genes <- c()
-            node.HOGS <- node.dataframe[,1][node.dataframe[,2] == as.integer(node)]
-            #print(node.HOGS)
-            for (n in node.HOGS){
-              #print(n)
-              H.g <- annot.file[annot.file["HOG"] == n, 4:dim(annot.file)[2]]
-              for (h in H.g){
-                if (is.na(h)) {next}
-                genes. <- strsplit(h, ",")[[1]]
-                HOG.genes <- c(HOG.genes, genes.)
-              }
 
-            }
-            print(HOG.genes)
-            HOG.genes <- data.frame(genes = HOG.genes)
-            write.csv(HOG.genes, paste0(sprintf("../../results/Networks/big/%s", net.file), sprintf("/node_genes/node_%s.csv", node)))
-          }
-          # ================================ Create node barplot
-          node.names <- c()
-          node.n.genes <- c()
-          for (f in list.files("../../results/Networks/big/T.92/node_genes/")){
-            if (!grepl("info", f)){
-              node.name <- gsub("[^0-9]*", "", f)
-              node.names <- c(node.names, node.name)
-              node.dataframe <- read.csv(paste0("../../results/Networks/big/T.92/node_genes/",f))
-              n.genes <- dim(node.dataframe)[1]
-              node.n.genes <- c(node.n.genes, n.genes)
-            }
-          }
-          barplot(node.n.genes, as.numeric(node.names), names.arg = node.names, legend.text = "Genes por nodo")
+log_transform <- T
+mutual_info <- T
             
-          }
-          # ================================ Extract most connected nodes by module
-          node.dataframe <- read.csv("../../results/Networks/big/T.92/node_genes/node_info.csv")
-          highest.degree.HOGS <- read.csv("../../results/Networks/big/T.92/degree.csv") %>% arrange(desc(Degree))
-          for (node in names(table(node.dataframe[,2]))){
-            print(node)
-            HOGS.in.node <- node.dataframe[node.dataframe[, 2] == as.integer(node), 1]
-            print(HOGS.in.node)
-            HOG.degree <- highest.degree.HOGS[as.vector(highest.degree.HOGS[,1]) %in% HOGS.in.node, 2]
-            print(HOG.degree)
-            hist(HOG.degree, main = sprintf("Módulo %s", node), xlab = "Grado")
-        }
-        
-          # ================================ Extract nodes size
-          node.dataframe <- read.csv("../../results/Networks/big/T.92/node_genes/node_info.csv")
-          highest.degree.HOGS <- read.csv("../../results/Networks/big/T.92/degree.csv") %>% arrange(desc(Degree))
-          module.names <- c()
-          module.size <- c()
-          for (module in names(table(node.dataframe[,2]))){
-            print(module)
-            module.names <- c(module.names, module)
-            HOG.size <- length(node.dataframe[node.dataframe[, 2] == as.integer(module), 1])
-            print(HOG.size)
-            module.size <- c(module.size, HOG.size)
-          }
-          barplot(module.size, names.arg = module.names, col = "blue", main = "Tamaño de Nodos", legend.text = "Ortogrupos por nodo")
-          
-          # ================================ Depict barplot for anthocyanin HOGS
-          node.dataframe <- read.csv("../../results/Networks/big/T.92/node_genes/node_info.csv")
-          highest.degree.HOGS <- read.csv("../../results/Networks/big/T.92/degree.csv") %>% arrange(desc(Degree))
-          module.names <- c()
-          annot.HOGS.byModule <- c()
-          DE.HOGS.byModule <- c()
-          for (module in names(table(node.dataframe[,2]))){
-            print(module)
-            module.names <- c(module.names, module)
-            HOGS.in.node <- node.dataframe[node.dataframe[, 2] == as.integer(module), 1]
-            print(HOGS.in.node)
-            HOGS.in.annot <- length(HOGS.in.node [HOGS.in.node %in% floavonoid.path.HOGS])
-            annot.HOGS.byModule <- c(annot.HOGS.byModule, HOGS.in.annot)
-            
-            HOGS.in.DEH <- length(HOGS.in.node [HOGS.in.node %in% D.E.HOGS])
-            DE.HOGS.byModule <- c(DE.HOGS.byModule, HOGS.in.DEH)
-          }
-          values_matrix <- matrix(0, ncol = 38, nrow = 3)
-          values_matrix[1,] <- module.size
-          values_matrix[2,] <- annot.HOGS.byModule
-          values_matrix[3,]  <- DE.HOGS.byModule
-          barplot(
-          values_matrix,
-          beside = TRUE,
-          col = c("green", "blue", "red"),
-          names.arg = module.names,
-          legend.text = c("Tamaño de módulo","Anotación antocianinas", "Ortogrupos Dif. Exp"),
-          ylim = c(0, max(values_matrix) * 1.2),  # Adjust ylim for better visualization
-          main = "Ortogrupos de diferentes categorías por cada módulo"
-        )
-          
-          
-          annot.HOGS.byModule <- c()
-          DE.HOGS.byModule <- c()
-          for (module in names(table(node.dataframe[,2]))){
-            print(module)
-            module.names <- c(module.names, module)
-            HOGS.in.node <- node.dataframe[node.dataframe[, 2] == as.integer(module), 1]
-            print(HOGS.in.node)
-            HOGS.in.annot <- length(HOGS.in.node [HOGS.in.node %in% floavonoid.path.HOGS])
-            annot.HOGS.byModule <- c(annot.HOGS.byModule, HOGS.in.annot)
-            
-            HOGS.in.DEH <- length(HOGS.in.node [HOGS.in.node %in% D.E.HOGS])
-            DE.HOGS.byModule <- c(DE.HOGS.byModule, HOGS.in.DEH)
-          }
-          values_matrix <- matrix(0, ncol = 38, nrow = 3)
-          values_matrix[1,] <- annot.HOGS.byModule
-          values_matrix[2,]  <- DE.HOGS.byModule
-          barplot(
-          values_matrix,
-          beside = TRUE,
-          col = c("blue", "red"),
-          names.arg = module.names,
-          legend.text = c("Anotación antocianinas", "Ortogrupos Dif. Exp"),
-          ylim = c(0, max(values_matrix) * 1.2),  # Adjust ylim for better visualization
-          main = "Ortogrupos de diferentes categorías por cada módulo"
-        )
-          
-        }
+# ================================== Identify degree genes in each HOG =========================================
+# ================================= By degree
+
+for (net.size.dir in list.dirs("../../results/networks")){
+  if (grepl("/small/", net.size.dir)){
+    if (!log_transform && grepl("raw", net.size.dir)) {
+      if (!mutual_info && grepl("mutual", net.size.dir))
+        print(net.size.dir)
+      else if (mutual_info && grepl("corr", net.size.dir)){
+        print(net.size.dir)
+      }
+    }
+    else if (log_transform && grepl("log", net.size.dir)){
+      if (!mutual_info && grepl("corr", net.size.dir))
+        print(net.size.dir)
+      else if (mutual_info && grepl("mutual", net.size.dir)){
+        print(net.size.dir)
       }
     }
   }
-}
+}  
 ```
 
 

@@ -1,4 +1,6 @@
-# ========================= Creating dirs ===============================
+library(dplyr)
+
+# ====================================== CREATE DIRS ===============================
 create.dir <- function(dir){
   if (!dir.exists(dir)){
     dir.splitted <- strsplit(dir, "/")[[1]]
@@ -12,7 +14,7 @@ create.dir <- function(dir){
 }
 
 
-# ======================== Filtering =====================================
+# ====================================== FILTERING =====================================
 # Obtain filtered dataframe -----------------------------------------------
 get.filtered.matrix <- function(x, dataframe){
   if (is.vector(x) && length(x) > 0 && is.character(x)){
@@ -58,4 +60,44 @@ getHighcorGenes <- function(expression.matrix, threshold){
   }
   return(high.corr.genes)
 }
-#==================================================================
+
+
+# ====================================== NETWORK ANALYSIS =================================
+
+# ====================== DEGREE ======================
+
+view.hogs.degree <- function(degree.frame, n = F){
+  # (This function return a list with info about nodes degree) #
+  if (is.numeric(n)){
+    highest.degrees <- degree.frame %>% arrange(desc(Degree))
+    #View(highest.degrees[1:n,])
+    return(list(Names = unlist(highest.degrees[1:n,]$`X`), Degrees = unlist(highest.degrees[1:n,]$`Degree`)))
+  } else {
+    highest.degrees <- degree.frame %>% arrange(desc(Degree))
+    #View(highest.degrees)
+  }
+}
+
+get.central.HOGS.forNode <- function(nodes.file, degree.list){
+  node.frame <<- read.csv(nodes.file)
+  message("Modules...")
+  modules <- table(node.frame[,2])
+  print(modules)
+  n.modules <- length(modules)
+  message(sprintf("Network has %s modules; most connected HOGS are in modules: ", n.modules))
+  
+  for (h in degree.list$Names){
+    print(cat(h, "= Node ", node.frame[node.frame[,1] == h, 2]))
+  }
+}
+
+connected.Hogs.forNode <- function(degree.frame, module, n){
+  hogs <- node.frame[node.frame[,2] == module, 1]
+  degree.frame.filtered <- degree.frame[degree.frame$X %in% hogs,] %>% arrange(desc(Degree))
+  degree.frame.filtered <-  degree.frame.filtered[1:n,]
+  print(" HOG   DEGREE")
+  for (x in unlist(degree.frame.filtered$`X`)){
+    print(cat(x, degree.frame.filtered[degree.frame.filtered$`X` == x, "Degree"]))
+  }
+}
+
