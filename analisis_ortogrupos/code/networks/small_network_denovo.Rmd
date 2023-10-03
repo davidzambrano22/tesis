@@ -518,8 +518,8 @@ NETWORK ANALYSIS
 
 source("./functions.R")
 
-log_transform <- F
-mutual_info <- F
+log_transform <- T
+mutual_info <- T
             
 # ================================== Identify degree genes in each HOG ==============================
 # ================================= By degree
@@ -558,45 +558,137 @@ for (net.size.dir in list.dirs("../../results/networks")){
             print(paste0(net.size.dir,"/",file))
             get.central.HOGS.forNode(paste0(net.size.dir,"/",file), degree.list = most.central.HOGS)
             
-            #Get N more connected Hogs for instroduced module
+            message(cat("Number of HOGS in the final network is ==> ", dim(modules.frame)[[1]]))
             
+            # Get N more connected Hogs for instroduced module
             while(grepl("^[0-9]*$", module.number <- readline("Enter module number"))){
               n.central <- readline("Enter number of  HOGs tu return for that module")
               connected.Hogs.forNode(degree.frame, module.number, n.central) ################
             }
+                          
+            # Draw barplot of anthocyanin 
+            draw.flavonoidInModules()
+            
           }
         }
         
         # IF MUTUAL INFO
       } else if (mutual_info && grepl("mutual_info", net.size.dir)){ 
         tao.value <- str_extract_all(net.size.dir, "\\b\\d+\\.\\d+\\b")[[1]] # Get the tao values for that network
+        
         if (grepl("(degree$)", net.size.dir)){
           for (file in list.files(net.size.dir)){
             message(paste0("Getting most central degree hogs for ", net.size.dir))
-            view.hogs.degre(paste0(net.size.dir,"/",file))
+            degree.frame <- read.csv(paste0(net.size.dir,"/" ,file))
+            view.hogs.degree(degree.frame)
             
-            n.hogs <- readline("How many HOGS do you want to return?")
+            # Most  central HOGS in all network   and their genes 
+            n.hogs <- as.numeric(readline("How many HOGS do you want to return?"))
+            most.central.HOGS <-  view.hogs.degree(degree.frame, n = n.hogs)
+            print(most.central.HOGS)
+
           }
         } else if (grepl("(graph$)", net.size.dir)){
           for (file in list.files(net.size.dir)){
-            print(paste0(net.size.dir,"/",file))
+            #print(paste0(net.size.dir,"/",file))
           }
         } else if (grepl("(Modules$)", net.size.dir)){
           for (file in list.files(net.size.dir)){
+            # Most central HOGs per module
             print(paste0(net.size.dir,"/",file))
+            get.central.HOGS.forNode(paste0(net.size.dir,"/",file), degree.list = most.central.HOGS)
+            
+            message(cat("Number of HOGS in the final network is ==> ", dim(modules.frame)[[1]]))
+            
+            # Get N more connected Hogs for instroduced module
+            while(grepl("^[0-9]*$", module.number <- readline("Enter module number"))){
+              n.central <- readline("Enter number of  HOGs tu return for that module")
+              connected.Hogs.forNode(degree.frame, module.number, n.central) ################
+            }
+                          
+            # Draw barplot of anthocyanin 
+            draw.flavonoidInModules()
+            
           }
         }
+        
       }
       
       #  IF LOG TRANSFORMED
     } else if (log_transform && grepl("log", net.size.dir)){
       if (!mutual_info && grepl("corr", net.size.dir)){
-        # print(net.size.dir)
-        get.most.central.hogs(net.size.dir)
+        if (grepl("(degree$)", net.size.dir)){
+          for (file in list.files(net.size.dir)){
+            message(paste0("Getting most central degree hogs for ", net.size.dir))
+            degree.frame <- read.csv(paste0(net.size.dir,"/" ,file))
+            view.hogs.degree(degree.frame)
+            
+            # Most  central HOGS in all network   and their genes 
+            n.hogs <- as.numeric(readline("How many HOGS do you want to return?"))
+            most.central.HOGS <-  view.hogs.degree(degree.frame, n = n.hogs)
+            print(most.central.HOGS)
+
+          }
+        } else if (grepl("(graph$)", net.size.dir)){
+          for (file in list.files(net.size.dir)){
+            #print(paste0(net.size.dir,"/",file))
+          }
+        } else if (grepl("(Modules$)", net.size.dir)){
+          for (file in list.files(net.size.dir)){
+            # Most central HOGs per module
+            print(paste0(net.size.dir,"/",file))
+            get.central.HOGS.forNode(paste0(net.size.dir,"/",file), degree.list = most.central.HOGS)
+            
+            message(cat("Number of HOGS in the final network is ==> ", dim(modules.frame)[[1]]))
+            
+            # Get N more connected Hogs for instroduced module
+            while(grepl("^[0-9]*$", module.number <- readline("Enter module number"))){
+              n.central <- readline("Enter number of  HOGs tu return for that module")
+              connected.Hogs.forNode(degree.frame, module.number, n.central) ################
+            }
+                          
+            # Draw barplot of anthocyanin 
+            draw.flavonoidInModules()
+            
+          }
+        }
       }
       else if (mutual_info && grepl("mutual", net.size.dir)){
-        # print(net.size.dir)
-        get.most.central.hogs(net.size.dir)
+        if (grepl("(degree$)", net.size.dir)){
+          for (file in list.files(net.size.dir)){
+            message(paste0("Getting most central degree hogs for ", net.size.dir))
+            degree.frame <- read.csv(paste0(net.size.dir,"/" ,file))
+            view.hogs.degree(degree.frame)
+            
+            # Most  central HOGS in all network   and their genes 
+            n.hogs <- as.numeric(readline("How many HOGS do you want to return?"))
+            most.central.HOGS <-  view.hogs.degree(degree.frame, n = n.hogs)
+            print(most.central.HOGS)
+
+          }
+        } else if (grepl("(graph$)", net.size.dir)){
+          for (file in list.files(net.size.dir)){
+            #print(paste0(net.size.dir,"/",file))
+          }
+        } else if (grepl("(Modules$)", net.size.dir)){
+          for (file in list.files(net.size.dir)){
+            # Most central HOGs per module
+            print(paste0(net.size.dir,"/",file))
+            get.central.HOGS.forNode(paste0(net.size.dir,"/",file), degree.list = most.central.HOGS)
+            
+            message(cat("Number of HOGS in the final network is ==> ", dim(modules.frame)[[1]]))
+            
+            # Get N more connected Hogs for instroduced module
+            while(grepl("^[0-9]*$", module.number <- readline("Enter module number"))){
+              n.central <- readline("Enter number of  HOGs tu return for that module")
+              connected.Hogs.forNode(degree.frame, module.number, n.central) ################
+            }
+                          
+            # Draw barplot of anthocyanin 
+            draw.flavonoidInModules()
+            
+          }
+        }
       }
     }
   }
