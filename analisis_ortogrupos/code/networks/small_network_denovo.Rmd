@@ -11,8 +11,8 @@ source("./functions.R")
 
 
 ```{r}
-log_transform <- T
-mutual_info <- T
+log_transform <- F
+mutual_info <- F
 
 for (dir. in list.dirs("../../data/")){
   if (grepl("denovo$", dir.) || grepl("REFs$", dir.)){
@@ -173,7 +173,7 @@ network_info <- list()
 
 ```{r}
 ## ========================================CREATE NETWORK
-TAO <- 0.71
+TAO <- 0.62
 
 for (tao in TAO){
   #Define matriz de adyacencia:
@@ -518,9 +518,9 @@ NETWORK ANALYSIS
 
 source("./functions.R")
 
-log_transform <- T
-mutual_info <- T
-            
+# log_transform <- F
+# mutual_info <- T
+
 # ================================== Identify degree genes in each HOG ==============================
 # ================================= By degree
 

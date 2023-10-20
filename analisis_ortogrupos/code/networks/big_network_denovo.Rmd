@@ -11,8 +11,8 @@ source("./functions.R")
 
 
 ```{r}
-log_transform <- F
-mutual_info <- T
+log_transform <- T
+mutual_info <- F
 
 for (dir. in list.dirs("../../data/")){
   if (grepl("denovo$", dir.) || grepl("REFs$", dir.)){
@@ -30,9 +30,9 @@ for (dir. in list.dirs("../../data/")){
           floavonoid.path.HOGS <- read.csv("../../results/filtered_genes/flav.HOGS.csv")$`annot.info` %>% as.vector()
           print(cat("Number of unique Anthocyanin annotated HOG HOGS is ==>", length(floavonoid.path.HOGS)))
 
-          # --Load most variable HOGS
+          # --Load most variable HOGS (percentages)
           message("Loading most variable HOGS...")
-          most.var.HOGS.names <- read.csv("../../results/filtered_genes/6000_most_variable_genes.csv6000.csv")$`Var1` %>% as.vector()
+          most.var.HOGS.names <- read.csv("../../results/filtered_genes/0.10_most_variable_genes.csv")$`Var1` %>% as.vector()
           
           # --Load DEHS (differentially expressed HOGS)
           message("Loading differentially expressed HOGS...")
@@ -108,9 +108,12 @@ for (dir. in list.dirs("../../data/")){
                 message("Loading mututal information for all genes of interest from results/networks/big/log_transformed/mutual_info/sim_matrix/sim_matrix.csv ...")
                 sim.matrix <- read.csv("../../results/networks/big/raw/mutual_info/sim_matrix/sim_matrix.csv")
                 
-                #Rename correlation matrix with HOGS names
-                colnames(sim.matrix) <- rownames(expression.data)
-                rownames(sim.matrix) <- rownames(expression.data)
+                # #Rename correlation matrix with HOGS names
+                # colnames(sim.matrix) <- rownames(expression.data)
+                message("renaming rows from simmilarity matrix")
+                rownames(sim.matrix) <- sim.matrix$`X`
+                sim.matrix <- sim.matrix %>% select(-X) %>% as.matrix()
+                message(cat("Class of sim matrix is = ", class(sim.matrix)))
                 
               } else {
                 # --Obtaining mutual information
@@ -209,8 +212,13 @@ for (dir. in list.dirs("../../data/")){
 
 
 ```{r}
+network_info <- list()
+```
+
+
+```{r}
 ## ========================================CREATE NETWORK
-TAO <- 0.95
+TAO <- 0.68
 
 for (tao in TAO){
   #Define matriz de adyacencia:
@@ -620,7 +628,7 @@ for (net.size.dir in list.dirs("../../results/networks")){
             view.hogs.degree(degree.frame)
             
             # Most  central HOGS in all network   and their genes 
-            n.hogs <- as.numeric(readline("How many HOGS do you want to return?"))
+            n.hogs <- 6 #as.numeric(readline("How many HOGS do you want to return?"))
             most.central.HOGS <-  view.hogs.degree(degree.frame, n = n.hogs)
             print(most.central.HOGS)
 
@@ -661,7 +669,7 @@ for (net.size.dir in list.dirs("../../results/networks")){
             view.hogs.degree(degree.frame)
             
             # Most  central HOGS in all network   and their genes 
-            n.hogs <- as.numeric(readline("How many HOGS do you want to return?"))
+            n.hogs <- 6 #as.numeric(readline("How many HOGS do you want to return?"))
             most.central.HOGS <-  view.hogs.degree(degree.frame, n = n.hogs)
             print(most.central.HOGS)
 
@@ -698,7 +706,7 @@ for (net.size.dir in list.dirs("../../results/networks")){
             view.hogs.degree(degree.frame)
             
             # Most  central HOGS in all network   and their genes 
-            n.hogs <- as.numeric(readline("How many HOGS do you want to return?"))
+            n.hogs <- 6 #as.numeric(readline("How many HOGS do you want to return?"))
             most.central.HOGS <-  view.hogs.degree(degree.frame, n = n.hogs)
             print(most.central.HOGS)
 

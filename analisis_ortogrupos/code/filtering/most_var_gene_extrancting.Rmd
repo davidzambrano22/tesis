@@ -28,14 +28,29 @@ for (dir. in list.dirs("../../data/")){
           print(dim(de.novo.table))
           # ====================== Getting variation coefficient ====================
           de.novo.table <- de.novo.table %>% mutate(vCoef = rowVarCoef(as.matrix(across(c(starts_with("A")))))) %>% arrange(desc(vCoef))
-          View(de.novo.table)
+          # View(de.novo.table)
           
           # --Save 6000 most variable genes
-          saving.dir <- "../../results/filtered_genes/6000_most_variable_genes.csv"
+          saving.dir <- "../../results/filtered_genes/"
           if (!file.exists(saving.dir)){
             dir.create(saving.dir)
           }
-          write.csv(data.frame(table(de.novo.table$Row.Labels[1:6000])), paste0(saving.dir,"6000.csv"))
+          #write.csv(data.frame(table(de.novo.table$Row.Labels[1:6000])), paste0(saving.dir,"6000.csv"))
+          
+          # -- Save 10% and 15% of most variable genes
+          percentage.float <- 0.15
+          
+          saving.dir <- "../../results/filtered_genes/"
+          if (!file.exists(saving.dir)){
+            dir.create(saving.dir)
+          }
+          percentage.value <- ceiling(dim(de.novo.table)[1] * percentage.float)
+          print(percentage.value)
+          write.csv(data.frame(table(de.novo.table$Row.Labels[1:percentage.value])), paste0(saving.dir, sprintf("%s_most_variable_genes.csv", percentage.float)))
+          
+          
+          
+          
         }
       }
     }
