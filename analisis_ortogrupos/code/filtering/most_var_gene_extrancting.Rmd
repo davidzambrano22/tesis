@@ -21,16 +21,20 @@ for (dir. in list.dirs("../../data/")){
       for (file. in list.files(dir.)){
         print(file.)
         if (grepl("^A_TPM", file.)){
-          de.novo.table <- read.delim(paste0(dir.,"/", file.), sep="\t", header=TRUE, na.strings="") %>% select("Row.Labels", starts_with("A")) 
+          de.novo.table <- read.delim(paste0(dir.,"/", file.), sep="\t", header=TRUE, na.strings="") %>% dplyr::select("Row.Labels", starts_with("A")) 
           # ====================== Filtering Data  ==================================
           # -- Expression = 0
           de.novo.table <- de.novo.table[rowSums(as.matrix(de.novo.table[2:dim(de.novo.table)[2]])) != 0,]
           print(dim(de.novo.table))
+          
+          # -- Expression >= 5000
+          de.novo.table <- de.novo.table[5e3 > apply(de.novo.table[2:dim(de.novo.table)[2]], 1, max),]
+          
           # ====================== Getting variation coefficient ====================
           de.novo.table <- de.novo.table %>% mutate(vCoef = rowVarCoef(as.matrix(across(c(starts_with("A")))))) %>% arrange(desc(vCoef))
           # View(de.novo.table)
           
-          # --Save 6000 most variable genes
+          # --Save  most variable genes
           saving.dir <- "../../results/filtered_genes/"
           if (!file.exists(saving.dir)){
             dir.create(saving.dir)

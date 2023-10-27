@@ -6,13 +6,14 @@ library(corrplot)
 library(igraph)
 library(infotheo)
 library(stringr)
+library(ppcor) # For partial correlation
 source("./functions.R")
 ```
 
 
 ```{r}
-log_transform <- T
-mutual_info <- F
+log_transform <- F
+partial.corr <- F
 
 for (dir. in list.dirs("../../data/")){
   if (grepl("denovo$", dir.) || grepl("REFs$", dir.)){
@@ -22,17 +23,32 @@ for (dir. in list.dirs("../../data/")){
       for (file. in list.files(dir.)){
         if (grepl("^A_TPM", file.)){
           print(file.)
-          de.novo.table <- read.delim(paste0(dir.,"/", file.), sep="\t", header=TRUE, na.strings="") %>% select("Row.Labels", starts_with("A")) 
+          de.novo.table <- read.delim(paste0(dir.,"/", file.), sep="\t", header=TRUE, na.strings="") %>% dplyr::select("Row.Labels",starts_with("A")) 
+          cat("Dimensions of initial de.novo.table are ==> ", dim(de.novo.table))
+          
+          # ================================ filtering denovo table (quality control)  =====================================
+          message("Filtering expression data...")
+          # ================================ Expression = 0
+          de.novo.table <- de.novo.table[rowSums(as.matrix(de.novo.table[2:dim(de.novo.table)[2]])) != 0,]
+          
+          # ================================ Expression >= 5000
+          de.novo.table <- de.novo.table[5e3 > apply(de.novo.table[2:dim(de.novo.table)[2]], 1, max),]
+          
+          # ================================ Variation = 0
+          de.novo.table <- de.novo.table[0 < apply(de.novo.table[2:dim(de.novo.table)[2]], 1, var), ]
+          
+          cat("Filtered dataframe dimenstions are --> ", dim(de.novo.table))
           
           # ====================== Loading gene names of interest  ================================================
           # --Load genes from Falvonoids path
           message("Loading Anthocyanin annotated  HOGS...")
           floavonoid.path.HOGS <- read.csv("../../results/filtered_genes/flav.HOGS.csv")$`annot.info` %>% as.vector()
-          print(cat("Number of unique Anthocyanin annotated HOG HOGS is ==>", length(floavonoid.path.HOGS)))
+          cat("Number of unique Anthocyanin annotated HOG HOGS is ==>", length(floavonoid.path.HOGS))
 
           # --Load most variable HOGS (percentages)
           message("Loading most variable HOGS...")
-          most.var.HOGS.names <- read.csv("../../results/filtered_genes/0.10_most_variable_genes.csv")$`Var1` %>% as.vector()
+          most.var.HOGS.names <- read.csv("../../results/filtered_genes/0.1_most_variable_genes.csv")$`Var1` %>% as.vector()
+          cat("Number of most variable  HOGS is ==>", length(most.var.HOGS.names))
           
           # --Load DEHS (differentially expressed HOGS)
           message("Loading differentially expressed HOGS...")
@@ -59,9 +75,10 @@ for (dir. in list.dirs("../../data/")){
             expression.data <- get.filtered.matrix(names(table(network.genes)), de.novo.table)
             hog.names <- expression.data$Row.Labels
             rownames(expression.data) <- hog.names #Rename expression data with gene names
-            expression.data <- expression.data %>% select(-Row.Labels) %>% log(base = 2)
+            expression.data <- expression.data %>% dplyr::select(-Row.Labels) %>% log(base = 2)
             expression.data <-  data.frame(lapply(expression.data, function(x) ifelse(x == -Inf, 0, x)))
             rownames(expression.data) <- hog.names
+            boxplot(expression.data)
             print(cat("Filtered dataframe dimenstions are --> ", dim(expression.data)))
           } 
           
@@ -69,17 +86,20 @@ for (dir. in list.dirs("../../data/")){
             message("Obtaining raw expression matrix for all genes of interest...")
             expression.data <- get.filtered.matrix(names(table(network.genes)), de.novo.table)
             rownames(expression.data) <- expression.data$Row.Labels #Rename expression data with gene names
-            expression.data <- expression.data %>% select(-Row.Labels)
+            expression.data <- expression.data %>% dplyr::select(-Row.Labels)
+            
+            boxplot(expression.data)
             print(cat("Filtered dataframe dimenstions are --> ", dim(expression.data)))
           }
 
           # ====================== Obtaining similarity matrix for all genes of interest ==========================
           #========================================================================================================
-          if (mutual_info){
+          if (partial.corr){
             if (!log_transform){
-              if (file.exists("../../results/networks/big/raw/mutual_info/sim_matrix/sim_matrix.csv")){
-                message("Loading mututal information for all genes of interest from results/networks/big/raw/mutual_info/sim_matrix/sim_matrix.csv ...")
-                sim.matrix <- read.csv("../../results/networks/big/raw/mutual_info/sim_matrix/sim_matrix.csv")
+              if (file.exists("../../results/networks/big/raw/partial.corr/sim_matrix/sim_matrix.csv")){
+                message("Loading mututal information for all genes of interest from results/networks/big/raw/partial.corr/sim_matrix/sim_matrix.csv ...")
+                sim.matrix <- read.csv("../../results/networks/big/raw/partial.corr/sim_matrix/sim_matrix.csv")
+                
                 
                 # #Rename correlation matrix with HOGS names
                 # colnames(sim.matrix) <- rownames(expression.data)
@@ -90,23 +110,22 @@ for (dir. in list.dirs("../../data/")){
                 
               } else {
                 # --Obtaining mutual information
-                message("Obtaining mututal information for all genes of interest...")
-                discretized.matrix <-discretize(t(expression.data), disc = "equalfreq", nbins = ceiling(1+log(ncol(expression.data))))
-                sim.matrix <- mutinformation(discretized.matrix, method = "emp")
+                message("Obtaining partial correlation for all genes of interest...")
+                sim.matrix <- abs(pcor(t(expression.data), method = "pearson")$estimate)
                 
                 #Rename correlation matrix with HOGS names
                 colnames(sim.matrix) <- rownames(expression.data)
                 rownames(sim.matrix) <- rownames(expression.data)
                 
-                saving.dir <- "../../results/networks/big/raw/mutual_info/sim_matrix/"
+                saving.dir <- "../../results/networks/big/raw/partial.corr/sim_matrix/"
                 tryCatch({write.csv(sim.matrix, paste0(saving.dir,"sim_matrix.csv"))},
                      error = function(e) {create.dir(saving.dir)
                        write.csv(sim.matrix, paste0(saving.dir,"sim_matrix.csv"))})
               }
             } else if (log_transform){
-              if (file.exists("../../results/networks/big/log_transformed/mutual_info/sim_matrix/sim_matrix.csv")){
-                message("Loading mututal information for all genes of interest from results/networks/big/log_transformed/mutual_info/sim_matrix/sim_matrix.csv ...")
-                sim.matrix <- read.csv("../../results/networks/big/raw/mutual_info/sim_matrix/sim_matrix.csv")
+              if (file.exists("../../results/networks/big/log_transformed/partial.corr/sim_matrix/sim_matrix.csv")){
+                message("Loading mututal information for all genes of interest from results/networks/big/log_transformed/partial.corr/sim_matrix/sim_matrix.csv ...")
+                sim.matrix <- read.csv("../../results/networks/big/raw/partial.corr/sim_matrix/sim_matrix.csv")
                 
                 # #Rename correlation matrix with HOGS names
                 # colnames(sim.matrix) <- rownames(expression.data)
@@ -117,37 +136,66 @@ for (dir. in list.dirs("../../data/")){
                 
               } else {
                 # --Obtaining mutual information
-                message("Obtaining mututal information for all genes of interest...")
-                discretized.matrix <-discretize(t(expression.data), disc = "equalfreq", nbins = ceiling(1+log(ncol(expression.data))))
-                sim.matrix <- mutinformation(discretized.matrix, method = "emp")
+                message("Obtaining partial correlation for all genes of interest...")
+                sim.matrix <- abs(pcor(t(expression.data), method = "pearson")$estimate)
+                
                 
                 #Rename correlation matrix with HOGS names
                 colnames(sim.matrix) <- rownames(expression.data)
                 rownames(sim.matrix) <- rownames(expression.data)
                 
-                saving.dir <- "../../results/networks/big/log_transformed/mutual_info/sim_matrix/"
+                saving.dir <- "../../results/networks/big/log_transformed/partial.corr/sim_matrix/"
                 tryCatch({write.csv(sim.matrix, paste0(saving.dir,"sim_matrix.csv"))},
                      error = function(e) {create.dir(saving.dir)
                        write.csv(sim.matrix, paste0(saving.dir,"sim_matrix.csv"))})
               }
             }
 
-          } else if (!mutual_info){
-            # --Obtaining correlation matrix for all genes
-            message("Obtaining correlation matrix for all genes of interest...")
-            sim.matrix <- abs(cor(t(expression.data), use = "pairwise.complete.obs"))
-            #Rename correlation matrix with HOGS names
-            colnames(sim.matrix) <- rownames(expression.data)
-            rownames(sim.matrix) <- rownames(expression.data)
-            # stop("Checking corr matrix")
+          } else if (!partial.corr){
+            if (!log_transform){
+              if (file.exists("../../results/networks/big/raw/pearson_corr/sim_matrix/sim_matrix.csv")){
+                message("Loading mututal information for all genes of interest from results/networks/big/raw/partial.corr/sim_matrix/sim_matrix.csv ...")
+                sim.matrix <- read.csv("../../results/networks/big/raw/partial.corr/sim_matrix/sim_matrix.csv")
+              }
+              else {
+                # --Obtaining correlation matrix for all genes
+                message("Obtaining Pearson correlation from raw data for all genes of interest...")
+                sim.matrix <- abs(cor(t(expression.data), use = "pairwise.complete.obs"))
+                #Rename correlation matrix with HOGS names
+                colnames(sim.matrix) <- rownames(expression.data)
+                rownames(sim.matrix) <- rownames(expression.data)
+                
+                saving.dir <- "../../results/networks/big/raw/pearson_corr/sim_matrix/"
+                tryCatch({write.csv(sim.matrix, paste0(saving.dir,"sim_matrix.csv"))},
+                     error = function(e) {create.dir(saving.dir)
+                       write.csv(sim.matrix, paste0(saving.dir,"sim_matrix.csv"))})
+              }
+            } else if (log_transform){
+              if (file.exists("../../results/networks/big/log_transformed/pearson_corr/sim_matrix/sim_matrix.csv")){
+                message("Loading mututal information for all genes of interest from results/networks/big/log_transformed/pearson_corr/sim_matrix/sim_matrix.csv ...")
+                sim.matrix <- read.csv("../../results/networks/big/log_transformed/pearson_corr/sim_matrix/sim_matrix.csv")
+                
+                message("renaming rows from simmilarity matrix")
+                rownames(sim.matrix) <- sim.matrix$`X`
+                sim.matrix <- sim.matrix %>% select(-X) %>% as.matrix()
+                message(cat("Class of sim matrix is = ", class(sim.matrix)))
+              }
+              else {
+                  # --Obtaining sim matrix using Pearson correlation
+                message("Obtaining Pearson correlation from Log2 data for all genes of interest...")
+                sim.matrix <- abs(cor(t(expression.data), use = "pairwise.complete.obs"))
+        
+                #Rename correlation matrix with HOGS names
+                colnames(sim.matrix) <- rownames(expression.data)
+                rownames(sim.matrix) <- rownames(expression.data)
+                
+                saving.dir <- "../../results/networks/big/log_transformed/pearson_corr/sim_matrix/"
+                tryCatch({write.csv(sim.matrix, paste0(saving.dir,"sim_matrix.csv"))},
+                     error = function(e) {create.dir(saving.dir)
+                       write.csv(sim.matrix, paste0(saving.dir,"sim_matrix.csv"))})
+              }
+            }
           }
-          
-          
-          # ====================== Check point for correlated genes ==========================
-          # --Filtering out low correlated genes
-          # High.corr.genes <- get.highCorr.genes(cor.matrix = sim.matrix, threshold = 0.7)
-          # # High.corr.genes <- getHighcorGenes(expression.data, 0.5)
-          # stop("Stopping code for mantenaince")
 
           # ===================== Determining the best threshold to work with on getting the network =============
           message("Getting clustering coefficients...")
@@ -218,7 +266,7 @@ network_info <- list()
 
 ```{r}
 ## ========================================CREATE NETWORK
-TAO <- 0.68
+TAO <- 0.89
 
 for (tao in TAO){
   #Define matriz de adyacencia:
@@ -251,52 +299,52 @@ for (tao in TAO){
 
     #plot.igraph(A,layout=layout_with_kk,vertex.color = vertex_colors,vertex.size=5,edge.color="darkgreen",vertex.label.font=1,vertex.label.cex=0.6, height=800, width=800, rescale = T)
     
-     ## ========================================================== NETWORK ANALYSIS ======================================================
-     ## ==================================================================================================================================
+  ## ========================================================== NETWORK ANALYSIS ======================================================
+  ## ==================================================================================================================================
    
     #========================================================== LOG TRANSFORMED ============================================================
     if (log_transform){
     
       #=============================IF CORR  ==============================
-      if (!mutual_info){
+      if (!partial.corr){
         #Draw and save similarity histogram
         hist(sim.matrix)
         
         #save graph object in the list info
-        network_info[["log"]][["corr"]][[as.character(tao)]][["A"]] <- A
+        network_info[["log"]][["pearson_corr"]][[as.character(tao)]][["A"]] <- A
         
         #Número de nodos
-        network_info[["log"]][["corr"]][[as.character(tao)]][["Length"]] <-  length(V(A))
+        network_info[["log"]][["pearson_corr"]][[as.character(tao)]][["Length"]] <-  length(V(A))
         
-        network_info[["log"]][["corr"]][[as.character(tao)]][["Modules"]] <- clusters(A, mode=c("weak"))
+        network_info[["log"]][["pearson_corr"]][[as.character(tao)]][["Modules"]] <- clusters(A, mode=c("weak"))
         
-        saving.dir <- sprintf("../../results/networks/big/log_transformed/corr/%s/Modules/", tao)
-        tryCatch({write.csv(data.frame(network_info[["log"]][["corr"]][[as.character(tao)]][["Modules"]]$membership), paste0(saving.dir,"Modules.csv"))},
+        saving.dir <- sprintf("../../results/networks/big/log_transformed/pearson_corr/%s/Modules/", tao)
+        tryCatch({write.csv(data.frame(network_info[["log"]][["pearson_corr"]][[as.character(tao)]][["Modules"]]$membership), paste0(saving.dir,"Modules.csv"))},
                  error = function(e) {create.dir(saving.dir)
-                     write.csv(data.frame(network_info[["log"]][["corr"]][[as.character(tao)]][["Modules"]]$membership), paste0(saving.dir,"Modules.csv"))})
+                     write.csv(data.frame(network_info[["log"]][["pearson_corr"]][[as.character(tao)]][["Modules"]]$membership), paste0(saving.dir,"Modules.csv"))})
         
         #Tamaño de Modules
-        network_info[["log"]][["corr"]][[as.character(tao)]][["Modules size"]] <- clusters(A, mode=c("weak"))$csize
+        network_info[["log"]][["pearson_corr"]][[as.character(tao)]][["Modules size"]] <- clusters(A, mode=c("weak"))$csize
         
         #Transitividad
-        network_info[["log"]][["corr"]][[as.character(tao)]][["Transitividad"]] <- transitivity(A, type="global") 
+        network_info[["log"]][["pearson_corr"]][[as.character(tao)]][["Transitividad"]] <- transitivity(A, type="global") 
         
         #Diámetro
-        network_info[["log"]][["corr"]][[as.character(tao)]][["Diameter"]] <- diameter(A)
+        network_info[["log"]][["pearson_corr"]][[as.character(tao)]][["Diameter"]] <- diameter(A)
         
         #============= SAVE GRAPH
-        saving.dir <- sprintf("../../results/networks/big/log_transformed/corr/%s/graph/", tao)
+        saving.dir <- sprintf("../../results/networks/big/log_transformed/pearson_corr/%s/graph/", tao)
             tryCatch({write.graph(A, paste0(saving.dir, "graph.txt"),format="ncol")},
                  error = function(e) {create.dir(saving.dir)
                    write.graph(A, paste0(saving.dir, "graph.txt"),format="ncol")})
         
         #============= DEGREE
         deg <- degree(A, mode="all")
-        network_info[["log"]][["corr"]][[as.character(tao)]][["Degree"]] <- deg
+        network_info[["log"]][["pearson_corr"]][[as.character(tao)]][["Degree"]] <- deg
         
         #Guarda tabla con información de grado
-        degree.table <- data.frame(Degree = network_info[["log"]][["corr"]][[as.character(tao)]][["Degree"]])
-        saving.dir <- sprintf("../../results/networks/big/log_transformed/corr/%s/degree/", tao)
+        degree.table <- data.frame(Degree = network_info[["log"]][["pearson_corr"]][[as.character(tao)]][["Degree"]])
+        saving.dir <- sprintf("../../results/networks/big/log_transformed/pearson_corr/%s/degree/", tao)
           tryCatch({write.csv(degree.table, paste0(saving.dir, "degree.csv"))},
                error = function(e) {create.dir(saving.dir)
                  write.csv(degree.table, paste0(saving.dir, "degree.csv"))})
@@ -313,63 +361,63 @@ for (tao in TAO){
               xlab="Degree", ylab="Cumulative Frequency")
         
         #Guarda información de centralización
-        network_info[["log"]][["corr"]][[as.character(tao)]][["centr_degree"]] <- centr_degree(A, mode="in", normalized=T)
+        network_info[["log"]][["pearson_corr"]][[as.character(tao)]][["centr_degree"]] <- centr_degree(A, mode="in", normalized=T)
         # cd<-centr_degree(A, mode="in", normalized=T)
         # cd$centralization
         # cd$res
         
         #Eigen centrality
-        network_info[["log"]][["corr"]][[as.character(tao)]][["eigen_centrality"]] <- eigen_centrality(A, directed=F, weights=NA)
+        network_info[["log"]][["pearson_corr"]][[as.character(tao)]][["eigen_centrality"]] <- eigen_centrality(A, directed=F, weights=NA)
         # eigc<-eigen_centrality(A, directed=F, weights=NA)
         
         #Hub score
-        network_info[["log"]][["corr"]][[as.character(tao)]][["hub_score"]] <- hub_score(A, weights=NA)$vector
+        network_info[["log"]][["pearson_corr"]][[as.character(tao)]][["hub_score"]] <- hub_score(A, weights=NA)$vector
         # hs <- hub_score(A, weights=NA)$vector
         # hs
         # sort(hs,decreasing = TRUE)
         # sort(deg,decreasing = TRUE)
         
             
-      #=============================IF  MUTUAL INFO ==============================
-      } else if (mutual_info){
+      #=============================IF  PARTIAL CORRELATION  ==============================
+      } else if (partial.corr){
         #Draw and save similarity histogram
         hist(sim.matrix)
         
         #save graph object in the list info
-        network_info[["log"]][["mutual_info"]][[as.character(tao)]][["A"]] <- A
+        network_info[["log"]][["partial.corr"]][[as.character(tao)]][["A"]] <- A
         
         #Número de nodos
-        network_info[["log"]][["mutual_info"]][[as.character(tao)]][["Length"]] <-  length(V(A))
+        network_info[["log"]][["partial.corr"]][[as.character(tao)]][["Length"]] <-  length(V(A))
         
-        network_info[["log"]][["mutual_info"]][[as.character(tao)]][["Modules"]] <- clusters(A, mode=c("weak"))
+        network_info[["log"]][["partial.corr"]][[as.character(tao)]][["Modules"]] <- clusters(A, mode=c("weak"))
       
-        saving.dir <- sprintf("../../results/networks/big/log_transformed/mutual_info/%s/Modules/", tao)
+        saving.dir <- sprintf("../../results/networks/big/log_transformed/partial.corr/%s/Modules/", tao)
         tryCatch({write.csv(data.frame(network_info[["log"]][["corr"]][[as.character(tao)]][["Modules"]]$membership), paste0(saving.dir,"Modules.csv"))},
                  error = function(e) {create.dir(saving.dir)
-                   write.csv(data.frame(network_info[["log"]][["mutual_info"]][[as.character(tao)]][["Modules"]]$membership), paste0(saving.dir,"Modules.csv"))})
+                   write.csv(data.frame(network_info[["log"]][["partial.corr"]][[as.character(tao)]][["Modules"]]$membership), paste0(saving.dir,"Modules.csv"))})
         
          #Tamaño de Modules
-        network_info[["log"]][["mutual_info"]][[as.character(tao)]][["Modules size"]] <- clusters(A, mode=c("weak"))$csize
+        network_info[["log"]][["partial.corr"]][[as.character(tao)]][["Modules size"]] <- clusters(A, mode=c("weak"))$csize
         
         #Transitividad
-        network_info[["log"]][["mutual_info"]][[as.character(tao)]][["Transitividad"]] <- transitivity(A, type="global") 
+        network_info[["log"]][["partial.corr"]][[as.character(tao)]][["Transitividad"]] <- transitivity(A, type="global") 
         
         #Diámetro
-        network_info[["log"]][["mutual_info"]][[as.character(tao)]][["Diameter"]] <- diameter(A)
+        network_info[["log"]][["partial.corr"]][[as.character(tao)]][["Diameter"]] <- diameter(A)
         
         #============= SAVE GRAPH
-         saving.dir <- sprintf("../../results/networks/big/log_transformed/mutual_info/%s/graph/", tao)
+         saving.dir <- sprintf("../../results/networks/big/log_transformed/partial.corr/%s/graph/", tao)
          tryCatch({write.graph(A, paste0(saving.dir, "graph.txt"),format="ncol")},
                error = function(e) {create.dir(saving.dir)
                  write.graph(A, paste0(saving.dir, "graph.txt"),format="ncol")})
        
         #============= DEGREE
         deg <- degree(A, mode="all")
-        network_info[["log"]][["mutual_info"]][[as.character(tao)]][["Degree"]] <- deg
+        network_info[["log"]][["partial.corr"]][[as.character(tao)]][["Degree"]] <- deg
         #Guarda tabla con información de grado
-        degree.table <- data.frame(Degree = network_info[["log"]][["mutual_info"]][[as.character(tao)]][["Degree"]])
+        degree.table <- data.frame(Degree = network_info[["log"]][["partial.corr"]][[as.character(tao)]][["Degree"]])
         
-        saving.dir <- sprintf("../../results/networks/big/log_transformed/mutual_info/%s/degree/", tao)
+        saving.dir <- sprintf("../../results/networks/big/log_transformed/partial.corr/%s/degree/", tao)
         tryCatch({write.csv(degree.table, paste0(saving.dir, "degree.csv"))},
              error = function(e) {create.dir(saving.dir)
                write.csv(degree.table, paste0(saving.dir, "degree.csv"))})
@@ -386,17 +434,17 @@ for (tao in TAO){
               xlab="Degree", ylab="Cumulative Frequency")
         
         # Guarda información de centralización
-        network_info[["log"]][["mutual_info"]][[as.character(tao)]][["centr_degree"]] <- centr_degree(A, mode="in", normalized=T)
+        network_info[["log"]][["partial.corr"]][[as.character(tao)]][["centr_degree"]] <- centr_degree(A, mode="in", normalized=T)
         # cd<-centr_degree(A, mode="in", normalized=T)
         # cd$centralization
         # cd$res
         
         #Eigen centrality
-        network_info[["log"]][["mutual_info"]][[as.character(tao)]][["eigen_centrality"]] <- eigen_centrality(A, directed=F, weights=NA)
+        network_info[["log"]][["partial.corr"]][[as.character(tao)]][["eigen_centrality"]] <- eigen_centrality(A, directed=F, weights=NA)
         # eigc<-eigen_centrality(A, directed=F, weights=NA)
         
         #Hub score
-        network_info[["log"]][["mutual_info"]][[as.character(tao)]][["hub_score"]] <- hub_score(A, weights=NA)$vector
+        network_info[["log"]][["partial.corr"]][[as.character(tao)]][["hub_score"]] <- hub_score(A, weights=NA)$vector
         # hs <- hub_score(A, weights=NA)$vector
         # hs
         # sort(hs,decreasing = TRUE)
@@ -407,53 +455,53 @@ for (tao in TAO){
     } else if(!log_transform) { 
       
        #=============================IF CORR  ==============================
-      if (!mutual_info){
+      if (!partial.corr){
         #Draw and save similarity histogram
         hist(sim.matrix)
     
           
         #save graph object in the list info
-        network_info[["raw"]][["corr"]][[as.character(tao)]][["A"]] <- A
+        network_info[["raw"]][["pearson_corr"]][[as.character(tao)]][["A"]] <- A
         
         #Número de nodos
-        network_info[["raw"]][["corr"]][[as.character(tao)]][["Length"]] <-  length(V(A))
+        network_info[["raw"]][["pearson_corr"]][[as.character(tao)]][["Length"]] <-  length(V(A))
         
-        network_info[["raw"]][["corr"]][[as.character(tao)]][["Modules"]] <- clusters(A, mode=c("weak"))
+        network_info[["raw"]][["pearson_corr"]][[as.character(tao)]][["Modules"]] <- clusters(A, mode=c("weak"))
         
-        saving.dir <- sprintf("../../results/networks/big/raw/corr/%s/Modules/", tao)
-        tryCatch({write.csv(data.frame(network_info[["raw"]][["corr"]][[as.character(tao)]][["Modules"]]$membership), paste0(saving.dir,"Modules.csv"))},
+        saving.dir <- sprintf("../../results/networks/big/raw/pearson_corr/%s/Modules/", tao)
+        tryCatch({write.csv(data.frame(network_info[["raw"]][["pearson_corr"]][[as.character(tao)]][["Modules"]]$membership), paste0(saving.dir,"Modules.csv"))},
                  error = function(e) {create.dir(saving.dir)
-                     write.csv(data.frame(network_info[["raw"]][["corr"]][[as.character(tao)]][["Modules"]]$membership), paste0(saving.dir,"Modules.csv"))})
+                     write.csv(data.frame(network_info[["raw"]][["pearson_corr"]][[as.character(tao)]][["Modules"]]$membership), paste0(saving.dir,"Modules.csv"))})
         
         #Tamaño de Modules
-        network_info[["raw"]][["corr"]][[as.character(tao)]][["Modules size"]] <- clusters(A, mode=c("weak"))$csize
+        network_info[["raw"]][["pearson_corr"]][[as.character(tao)]][["Modules size"]] <- clusters(A, mode=c("weak"))$csize
         
         #Transitividad
-        network_info[["raw"]][["corr"]][[as.character(tao)]][["Transitividad"]] <- transitivity(A, type="global") 
+        network_info[["raw"]][["pearson_corr"]][[as.character(tao)]][["Transitividad"]] <- transitivity(A, type="global") 
         
         #Diámetro
-        network_info[["raw"]][["corr"]][[as.character(tao)]][["Diameter"]] <- diameter(A)
+        network_info[["raw"]][["pearson_corr"]][[as.character(tao)]][["Diameter"]] <- diameter(A)
         
         #============= SAVE GRAPH
-        saving.dir <- sprintf("../../results/networks/big/raw/corr/%s/graph/", tao)
+        saving.dir <- sprintf("../../results/networks/big/raw/pearson_corr/%s/graph/", tao)
             tryCatch({write.graph(A, paste0(saving.dir, "graph.txt"),format="ncol")},
                  error = function(e) {create.dir(saving.dir)
                    write.graph(A, paste0(saving.dir, "graph.txt"),format="ncol")})
         
         #============= DEGREE
         deg <- degree(A, mode="all")
-        network_info[["raw"]][["corr"]][[as.character(tao)]][["Degree"]] <- deg
+        network_info[["raw"]][["pearson_corr"]][[as.character(tao)]][["Degree"]] <- deg
         
         #Guarda tabla con información de grado
-        degree.table <- data.frame(Degree = network_info[["raw"]][["corr"]][[as.character(tao)]][["Degree"]])
-        saving.dir <- sprintf("../../results/networks/big/raw/corr/%s/degree/", tao)
+        degree.table <- data.frame(Degree = network_info[["raw"]][["pearson_corr"]][[as.character(tao)]][["Degree"]])
+        saving.dir <- sprintf("../../results/networks/big/raw/pearson_corr/%s/degree/", tao)
           tryCatch({write.csv(degree.table, paste0(saving.dir, "degree.csv"))},
                error = function(e) {create.dir(saving.dir)
                  write.csv(degree.table, paste0(saving.dir, "degree.csv"))})
         
         barplot(table(deg),las=2, main = "Barplot of degree")
-        plot(A, vertex.size=deg)
-        plot.igraph(A,layout=layout_with_kk,vertex.color = 'lightblue',vertex.size=deg,edge.color="darkgreen",vertex.label.font=1,vertex.label.cex=0.6 )
+        #plot(A, vertex.size=deg)
+        #plot.igraph(A,layout=layout_with_kk,vertex.color = 'lightblue',vertex.size=deg,edge.color="darkgreen",vertex.label.font=1,vertex.label.cex=0.6 )
         
         hist(deg, breaks=1:vcount(A)-1, main="Histogram of node degree")
         
@@ -463,63 +511,63 @@ for (tao in TAO){
               xlab="Degree", ylab="Cumulative Frequency")
         
         # Guarda información de centralización
-        network_info[["raw"]][["corr"]][[as.character(tao)]][["centr_degree"]] <- centr_degree(A, mode="in", normalized=T)
+        network_info[["raw"]][["pearson_corr"]][[as.character(tao)]][["centr_degree"]] <- centr_degree(A, mode="in", normalized=T)
         # cd<-centr_degree(A, mode="in", normalized=T)
         # cd$centralization
         # cd$res
         
         #Eigen centrality
-        network_info[["raw"]][["corr"]][[as.character(tao)]][["eigen_centrality"]] <- eigen_centrality(A, directed=F, weights=NA)
+        network_info[["raw"]][["pearson_corr"]][[as.character(tao)]][["eigen_centrality"]] <- eigen_centrality(A, directed=F, weights=NA)
         # eigc<-eigen_centrality(A, directed=F, weights=NA)
         
         #Hub score
-        network_info[["raw"]][["corr"]][[as.character(tao)]][["hub_score"]] <- hub_score(A, weights=NA)$vector
+        network_info[["raw"]][["pearson_corr"]][[as.character(tao)]][["hub_score"]] <- hub_score(A, weights=NA)$vector
         # hs <- hub_score(A, weights=NA)$vector
         # hs
         # sort(hs,decreasing = TRUE)
         # sort(deg,decreasing = TRUE)
         
         
-      #=============================IF  MUTUAL INFO ==============================
-      } else if (mutual_info){
+      #=============================IF  PARTIAL CORRELATION ==============================
+      } else if (partial.corr){
         #Draw and save similarity histogram
         hist(sim.matrix)
         
         #save graph object in the list info
-        network_info[["raw"]][["mutual_info"]][[as.character(tao)]][["A"]] <- A
+        network_info[["raw"]][["partial.corr"]][[as.character(tao)]][["A"]] <- A
         
         #Número de nodos
-        network_info[["raw"]][["mutual_info"]][[as.character(tao)]][["Length"]] <-  length(V(A))
+        network_info[["raw"]][["partial.corr"]][[as.character(tao)]][["Length"]] <-  length(V(A))
         
-        network_info[["raw"]][["mutual_info"]][[as.character(tao)]][["Modules"]] <- clusters(A, mode=c("weak"))
+        network_info[["raw"]][["partial.corr"]][[as.character(tao)]][["Modules"]] <- clusters(A, mode=c("weak"))
       
-        saving.dir <- sprintf("../../results/networks/big/raw/mutual_info/%s/Modules/", tao)
-        tryCatch({write.csv(data.frame(network_info[["raw"]][["mutual_info"]][[as.character(tao)]][["Modules"]]$membership), paste0(saving.dir,"Modules.csv"))},
+        saving.dir <- sprintf("../../results/networks/big/raw/partial.corr/%s/Modules/", tao)
+        tryCatch({write.csv(data.frame(network_info[["raw"]][["partial.corr"]][[as.character(tao)]][["Modules"]]$membership), paste0(saving.dir,"Modules.csv"))},
                  error = function(e) {create.dir(saving.dir)
-                   write.csv(data.frame(network_info[["raw"]][["mutual_info"]][[as.character(tao)]][["Modules"]]$membership), paste0(saving.dir,"Modules.csv"))})
+                   write.csv(data.frame(network_info[["raw"]][["partial.corr"]][[as.character(tao)]][["Modules"]]$membership), paste0(saving.dir,"Modules.csv"))})
         
          #Tamaño de Modules
-        network_info[["raw"]][["mutual_info"]][[as.character(tao)]][["Modules size"]] <- clusters(A, mode=c("weak"))$csize
+        network_info[["raw"]][["partial.corr"]][[as.character(tao)]][["Modules size"]] <- clusters(A, mode=c("weak"))$csize
         
         #Transitividad
-        network_info[["raw"]][["mutual_info"]][[as.character(tao)]][["Transitividad"]] <- transitivity(A, type="global") 
+        network_info[["raw"]][["partial.corr"]][[as.character(tao)]][["Transitividad"]] <- transitivity(A, type="global") 
         
         #Diámetro
-        network_info[["raw"]][["mutual_info"]][[as.character(tao)]][["Diameter"]] <- diameter(A)
+        network_info[["raw"]][["partial.corr"]][[as.character(tao)]][["Diameter"]] <- diameter(A)
         
         #============= SAVE GRAPH
-       saving.dir <- sprintf("../../results/networks/big/raw/mutual_info/%s/graph/", tao)
+       saving.dir <- sprintf("../../results/networks/big/raw/partial.corr/%s/graph/", tao)
        tryCatch({write.graph(A, paste0(saving.dir, "graph.txt"),format="ncol")},
                error = function(e) {create.dir(saving.dir)
                  write.graph(A, paste0(saving.dir, "graph.txt"),format="ncol")})
        
         #============= DEGREE
         deg <- degree(A, mode="all")
-        network_info[["raw"]][["mutual_info"]][[as.character(tao)]][["Degree"]] <- deg
+        network_info[["raw"]][["partial.corr"]][[as.character(tao)]][["Degree"]] <- deg
         #Guarda tabla con información de grado
-        degree.table <- data.frame(Degree = network_info[["raw"]][["mutual_info"]][[as.character(tao)]][["Degree"]])
+        degree.table <- data.frame(Degree = network_info[["raw"]][["partial.corr"]][[as.character(tao)]][["Degree"]])
         
-        saving.dir <- sprintf("../../results/networks/big/raw/mutual_info/%s/degree/", tao)
+        saving.dir <- sprintf("../../results/networks/big/raw/partial.corr/%s/degree/", tao)
         tryCatch({write.csv(degree.table, paste0(saving.dir, "degree.csv"))},
              error = function(e) {create.dir(saving.dir)
                write.csv(degree.table, paste0(saving.dir, "degree.csv"))})
@@ -536,17 +584,17 @@ for (tao in TAO){
               xlab="Degree", ylab="Cumulative Frequency")
         
          # Guarda información de centralización
-        network_info[["raw"]][["mutual_info"]][[as.character(tao)]][["centr_degree"]] <- centr_degree(A, mode="in", normalized=T)
+        network_info[["raw"]][["partial.corr"]][[as.character(tao)]][["centr_degree"]] <- centr_degree(A, mode="in", normalized=T)
         # cd<-centr_degree(A, mode="in", normalized=T)
         # cd$centralization
         # cd$res
         
         #Eigen centrality
-        network_info[["raw"]][["mutual_info"]][[as.character(tao)]][["eigen_centrality"]] <- eigen_centrality(A, directed=F, weights=NA)
+        network_info[["raw"]][["partial.corr"]][[as.character(tao)]][["eigen_centrality"]] <- eigen_centrality(A, directed=F, weights=NA)
         # eigc<-eigen_centrality(A, directed=F, weights=NA)
         
         #Hub score
-        network_info[["raw"]][["mutual_info"]][[as.character(tao)]][["hub_score"]] <- hub_score(A, weights=NA)$vector
+        network_info[["raw"]][["partial.corr"]][[as.character(tao)]][["hub_score"]] <- hub_score(A, weights=NA)$vector
         # hs <- hub_score(A, weights=NA)$vector
         # hs
         # sort(hs,decreasing = TRUE)
@@ -560,12 +608,6 @@ for (tao in TAO){
 
 
 ```{r}
-
-source("./functions.R")
-
-# log_transform <- T
-# mutual_info <- T
-            
 # ================================== Identify degree genes in each HOG ==============================
 # ================================= By degree
 
@@ -579,7 +621,7 @@ for (net.size.dir in list.dirs("../../results/networks")){
     if (!log_transform && grepl("raw", net.size.dir)) {
       
         # IF RAW AND CORR
-      if (!mutual_info && grepl("corr", net.size.dir)){
+      if (!partial.corr && grepl("corr", net.size.dir)){
         tao.value <- str_extract_all(net.size.dir, "\\b\\d+\\.\\d+\\b")[[1]] # Get the tao values for that network
         if (grepl("(degree$)", net.size.dir)){
           for (file in list.files(net.size.dir)){
@@ -606,11 +648,11 @@ for (net.size.dir in list.dirs("../../results/networks")){
             message(cat("Number of HOGS in the final network is ==> ", dim(modules.frame)[[1]]))
             
             # Get N more connected Hogs for instroduced module
-            # while(grepl("^[0-9]*$", module.number <- readline("Enter module number"))){
-            #   n.central <- readline("Enter number of  HOGs tu return for that module")
-            #   connected.Hogs.forNode(degree.frame, module.number, n.central) ################
-            # }
-                          
+            while(grepl("^[0-9]*$", module.number <- readline("Enter module number"))){
+              n.central <- readline("Enter number of  HOGs tu return for that module")
+              connected.Hogs.forNode(degree.frame, module.number, n.central) ################
+            }
+
             # Draw barplot of anthocyanin 
             draw.flavonoidInModules()
             
@@ -618,7 +660,7 @@ for (net.size.dir in list.dirs("../../results/networks")){
         }
         
         # IF MUTUAL INFO
-      } else if (mutual_info && grepl("mutual_info", net.size.dir)){ 
+      } else if (partial.corr && grepl("partial.corr", net.size.dir)){ 
         tao.value <- str_extract_all(net.size.dir, "\\b\\d+\\.\\d+\\b")[[1]] # Get the tao values for that network
         
         if (grepl("(degree$)", net.size.dir)){
@@ -646,10 +688,10 @@ for (net.size.dir in list.dirs("../../results/networks")){
             message(cat("Number of HOGS in the final network is ==> ", dim(modules.frame)[[1]]))
             
             # Get N more connected Hogs for instroduced module
-            # while(grepl("^[0-9]*$", module.number <- readline("Enter module number"))){
-            #   n.central <- readline("Enter number of  HOGs tu return for that module")
-            #   connected.Hogs.forNode(degree.frame, module.number, n.central) ################
-            # }
+            while(grepl("^[0-9]*$", module.number <- readline("Enter module number"))){
+              n.central <- readline("Enter number of  HOGs tu return for that module")
+              connected.Hogs.forNode(degree.frame, module.number, n.central) ################
+            }
                           
             # Draw barplot of anthocyanin 
             draw.flavonoidInModules()
@@ -661,7 +703,7 @@ for (net.size.dir in list.dirs("../../results/networks")){
       
       #  IF LOG TRANSFORMED
     } else if (log_transform && grepl("log", net.size.dir)){
-      if (!mutual_info && grepl("corr", net.size.dir)){
+      if (!partial.corr && grepl("corr", net.size.dir)){
         if (grepl("(degree$)", net.size.dir)){
           for (file in list.files(net.size.dir)){
             message(paste0("Getting most central degree hogs for ", net.size.dir))
@@ -687,10 +729,10 @@ for (net.size.dir in list.dirs("../../results/networks")){
             message(cat("Number of HOGS in the final network is ==> ", dim(modules.frame)[[1]]))
             
             # Get N more connected Hogs for instroduced module
-            # while(grepl("^[0-9]*$", module.number <- readline("Enter module number"))){
-            #   n.central <- readline("Enter number of  HOGs tu return for that module")
-            #   connected.Hogs.forNode(degree.frame, module.number, n.central) ################
-            # }
+            while(grepl("^[0-9]*$", module.number <- readline("Enter module number"))){
+              n.central <- readline("Enter number of  HOGs tu return for that module")
+              connected.Hogs.forNode(degree.frame, module.number, n.central) ################
+            }
                           
             # Draw barplot of anthocyanin 
             draw.flavonoidInModules()
@@ -698,7 +740,7 @@ for (net.size.dir in list.dirs("../../results/networks")){
           }
         }
       }
-      else if (mutual_info && grepl("mutual", net.size.dir)){
+      else if (partial.corr && grepl("mutual", net.size.dir)){
         if (grepl("(degree$)", net.size.dir)){
           for (file in list.files(net.size.dir)){
             message(paste0("Getting most central degree hogs for ", net.size.dir))
@@ -724,10 +766,10 @@ for (net.size.dir in list.dirs("../../results/networks")){
             message(cat("Number of HOGS in the final network is ==> ", dim(modules.frame)[[1]]))
             
             # Get N more connected Hogs for instroduced module
-            # while(grepl("^[0-9]*$", module.number <- readline("Enter module number"))){
-            #   n.central <- readline("Enter number of  HOGs tu return for that module")
-            #   connected.Hogs.forNode(degree.frame, module.number, n.central) ################
-            # }
+            while(grepl("^[0-9]*$", module.number <- readline("Enter module number"))){
+              n.central <- readline("Enter number of  HOGs tu return for that module")
+              connected.Hogs.forNode(degree.frame, module.number, n.central) ################
+            }
                           
             # Draw barplot of anthocyanin 
             draw.flavonoidInModules()
