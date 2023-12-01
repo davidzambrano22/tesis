@@ -7,4 +7,8 @@ analisis_ortogrupos/data/
 analisis_ortogrupos/results/
 analisis_ortogrupos/code/differential_expression/clustering_diff_expression.Rmd
 analisis_ortogrupos/code/differential_expression/functions_clustering.R
+WGCNA/
+analisis_ortogrupos/expression_data.csv
+*~
+*.swp
 .Rproj.user
