@@ -100,6 +100,9 @@ view.hogs.degree <- function(degree.frame, n = F, modules.t){
 
 get.central.HOGS.forNode <- function(modules.file, degree.list){
   modules.frame <<- read.csv(modules.file)
+  colnames(modules.frame) <- c("X", "Modules")
+  modules.frame <<- modules.frame
+  
   message("Modules...")
   modules <<- table(modules.frame[,2])
   print(modules)

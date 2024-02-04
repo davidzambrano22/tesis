@@ -20,7 +20,6 @@ library(dplyr)
 
 ```{r}
 source("./functions_preprocessing.R")
-source("./functions_diffExp.R")
 ```
 
 ```{r}
@@ -59,6 +58,7 @@ for (dir. in list.dirs("../../data/")){
           de.novo.table <- de.novo.table[0 < apply(de.novo.table[2:dim(de.novo.table)[2]], 1, var), ]
           print(cat("Dimensions of expression file after expression = 0 filter are =", dim(de.novo.table)))
           
+          stop()
           # =============================== DIFFERENTIAL EXPRESSION  ==============================
           message("Determining differential expression for all conditions...")
           
@@ -218,6 +218,104 @@ for (dir. in list.dirs("../../data/")){
 }
 ```
 
+
+
+DIFERENTIAL EXPRESSION FOR REF ACCESIONS
+
 ```{r}
-View(colData.)
+REFs_expression_frame <- read.delim("../../data/potato_REFs/A_TPM_Potato_REFs_by_HOG_ID.txt") %>% dplyr::select("HOG_ID", starts_with("A"))
+
+
+# Rename columns
+colnames(REFs_expression_frame) <- c("HOG_ID", substr(colnames(REFs_expression_frame)[2:dim(REFs_expression_frame)[2]], 3, 20))
+names(REFs_expression_frame)
+
+# Convert to integer
+for (column in colnames(REFs_expression_frame[2:dim(REFs_expression_frame)[2]])){
+            REFs_expression_frame[[column]] <- as.integer(round(REFs_expression_frame[[column]]))
+} 
+
+# ================================ FILTERING DATA  =====================================
+message("Filtering expression data...")
+print(cat("Dimensions of expression dataset are =", dim(REFs_expression_frame)))
+
+# Expression = 0
+REFs_expression_frame <- REFs_expression_frame[rowSums(as.matrix(REFs_expression_frame[2:dim(REFs_expression_frame)[2]])) != 0,]
+print(cat("Dimensions of expression file after expression = 0 filter are =", dim(REFs_expression_frame)))
+
+# Variation = 0
+REFs_expression_frame <- REFs_expression_frame[0 < apply(REFs_expression_frame[2:dim(REFs_expression_frame)[2]], 1, var), ]
+print(cat("Dimensions of expression file after expression = 0 filter are =", dim(REFs_expression_frame)))
+
+# boxplot(REFs_expression_frame[2:dim(REFs_expression_frame)[2]])
+# corrplot(cor(REFs_expression_frame[2:dim(REFs_expression_frame)[2]]))
+
+# =============================== DIFFERENTIAL EXPRESSION  ==============================
+message("Determining differential expression for all conditions...")
+
+# Rearrange columns according to expression of anthocyanins
+clear.accesions.pattern <- "PG1011|PG3022|PG3023|PG4005|PG4036|PG4041|PG6002|PG6241|PG6242|PG6243"
+colored.accesions.pattern <- "PG4042|PG1013|PG5032"
+
+# Make contrast vector (1 and 0)
+accesions.contrast <- c(rep(0, dim(REFs_expression_frame %>% dplyr::select(matches(clear.accesions.pattern)))[2]), rep(1, dim(REFs_expression_frame %>% dplyr::select(matches(colored.accesions.pattern)))[2]))
+print(length(accesions.contrast))
+
+# Select comuns with accesion of interest and ordered according to contrast vector
+REFs_expression_frame <- REFs_expression_frame %>% dplyr::select("HOG_ID", matches(clear.accesions.pattern), matches(colored.accesions.pattern))
+
+# Create coldata
+colData. <- data.frame(contrast=as.factor(accesions.contrast))
+
+# Create Deseq2 object
+dds0 <- DESeq2::DESeqDataSetFromMatrix(countData = REFs_expression_frame[2:dim(REFs_expression_frame)[2]],
+                                       colData = colData.,
+                                       design = ~contrast)
+# Stimate size factors
+SHRINKAGE <- F
+
+dds0 <- DESeq2::estimateSizeFactors(dds0)
+out.factors <- names(sizeFactors(dds0)[sizeFactors(dds0) < 0.3 | sizeFactors(dds0) > 3])
+message(cat("Outstimated factors are ==> ", out.factors))
+
+total.DEH <- c()
+
+if (length(out.factors) == 0){
+                message("No accession was removed after SizeFactors calculation")
+                dds0 <- DESeq2::DESeq(dds0, test = "LRT", reduced = ~1)
+                res0 <- results(dds0)
+                resultsNames(dds0)
+                
+                 if (isTRUE(SHRINKAGE)){
+                  message("Applying shrinkage method to fitted model")
+                  resLFC0 <- lfcShrink(dds0, type = "apeglm")
+                  #Get p values with Shrinkage
+                  Padj0 <- data.frame(p=res0$padj[resLFC0$padj<0.95])
+                  ggplot(Padj0, aes(x=p)) + geom_histogram(breaks = seq(0,0.95,0.05)) +
+                    labs(y='frecuencia') + scale_x_continuous(breaks = seq(0,0.95,0.05))
+                  
+                  DEH <- REFs_expression_frame[replace_na(resLFC0$padj <= 0.05, F), "HOG_ID"]  #Get differetentially expressed HOGS names
+                  sprintf("DEH for quantile %d and Anthocyanin %s =", q, paste(DEH, collapse = ","))
+                  total.DEH <- c(total.DEH, DEH)
+                  
+                } else {
+                  # Get p values
+                  Padj0 <- data.frame(p=res0$padj[res0$padj<0.95])
+                  ggplot(Padj0, aes(x=p)) + geom_histogram(breaks = seq(0,0.95,0.05)) +
+                    labs(y='frecuencia') + scale_x_continuous(breaks = seq(0,0.95,0.05))
+                  
+                  DEH <- REFs_expression_frame[replace_na(res0$padj <= 0.05, F), "HOG_ID"]  #Get differetentially expressed HOGS names
+                  sprintf("DEH for quantile %d and Anthocyanin %s =", q, paste(DEH, collapse = ","))
+                  total.DEH <- c(total.DEH, DEH)
+                }
+              }
 ```
+
+```{r}
+total.DEH
+```
+
+```{r}
+length(total.DEH)
+```
+

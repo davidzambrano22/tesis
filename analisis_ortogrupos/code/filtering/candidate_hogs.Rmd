@@ -1,0 +1,144 @@
+---
+title: "candidates extractions"
+author: "Andrés Arias"
+date: "2024-01-07"
+output: html_document
+---
+
+```{r}
+library(dplyr)
+```
+
+Se explora el dataframe en el que se encuentran los "genes" de cada orto grupo. La idea es hablar con el profesor federico.
+```{r}
+gene.in.HOGS.DF <- read.delim("../../data/potato_denovo/N0_Potato_de_novo.txt", sep = "\t") %>% as_tibble() 
+gene.in.HOGS.DF %>% View()
+```
+
+
+DATOS DISPONIBLES PARA LA ASIGNACIÓN DE PUNTAJES
+```{r}
+modules.frame <- read.csv("../../results/networks/big/raw/partial.corr/0.76/Modules/modules.csv")
+colnames(modules.frame) <- c("No", "Module", "HOG_ID", "REFSEQ_RNA", "Annot", "Keywords")
+View(modules.frame)
+
+# Topological measures
+betweenness.frame <- betweenness.frame %>% mutate(Betweenness_normalized = ((Betweenness - min(Betweenness)) / (max(Betweenness) - min(Betweenness))))
+eigen.centrality.frame
+transitivity.frame
+
+# HOGS features
+D.E.HOGS
+floavonoid.path.HOGS
+
+
+
+```
+
+View statistics and distribution of topological metrics
+
+BETWEENNESS
+```{r}
+hist(betweenness.frame$Betweenness_normalized, breaks = 50,
+     main = "Intermediación Normalizada",
+     xlab = "50 bins")
+boxplot(betweenness.frame$Betweenness_normalized)
+```
+
+EIGEN CENTRALITY
+```{r}
+hist(eigen.centrality.frame$eigen_centrality, breaks = 50,
+     main = "Centralidad Eigen",
+     xlab = "50 bins")
+boxplot(eigen.centrality.frame$eigen_centrality)
+```
+TRANSITIVIDAD
+```{r}
+hist(transitivity.frame$Transitivity,breaks = 50,
+     main = "Transitividad",
+     xlab = "50 bins")
+```
+
+
+```{r}
+for (module in names(table(modules.frame$Module))){
+  module.hogs <- modules.frame$HOG_ID[modules.frame$Module == module]
+  print(length(module.hogs))
+  if (length(module.hogs) < 50){
+    next
+  } else {
+      
+    hogs_ids <- c()
+    hogs_scores <- c()
+    
+    for (module.hog in module.hogs){
+      score <- 0
+    # if (module.hog %in% floavonoid.path.HOGS){
+    #   # Descarta el Hog por ser parte de la ruta de los flavonoides
+    #   print("Skipping...")
+    #   next
+    #   }
+    if (module.hog %in% D.E.HOGS ){ #& module.hog %in% most.var.HOGS.names){
+      # Asigna 3 puntos a los HOGS diferencialmente expresados y que al mismo tiempo está entre los más variables
+      score <- score +  0.4
+      } 
+      betweenness <- betweenness.frame$Betweenness[which(betweenness.frame$HOG_ID == module.hog)]
+    if (betweenness > 0.02){
+      score <- score +  0.3
+      } 
+      eigen_centrality <- eigen.centrality.frame$eigen_centrality[which(eigen.centrality.frame$HOG_ID == module.hog)]
+    if (eigen_centrality > 0.9){
+      score <- score +  0.25
+      } 
+      transitivity <- transitivity.frame$Transitivity[which(transitivity.frame$HOG_ID == module.hog)]
+    if (!is.na(transitivity) & transitivity > 0.98){
+      score <- score +  0.05
+      }
+      # print(score)
+      hogs_ids <- c(hogs_ids, module.hog)
+      hogs_scores <- c(hogs_scores, score)
+    }
+    scores_frame <- data.frame(ID = hogs_ids, Scores = hogs_scores) %>% arrange(desc(.$Scores)) %>%
+      left_join(annot.dataframe, by = c("ID" = "HOG_ID"),  keep = F) %>%
+      left_join(degree.frame, by = c("ID" = "X"), keep = F) %>% mutate(Flav_path = .$ID %in% floavonoid.path.HOGS) %>%
+      dplyr::select(ID, Scores, Flav_path, Degree, Refseq_RNA_ID, Refseq_Protein, Keywords, Annot_pathway, Annot_DAVID)
+    write.csv(scores_frame, sprintf("../../results/filtered_genes/candidate_hogs/scores_module_%s.csv", module))
+  }
+}
+```
+
+PLOTS HISTOGRAMS
+```{r}
+flav_scores_module3 <- read.csv("../../results/filtered_genes/candidate_hogs/scores_module_3.csv") %>% filter(Flav_path == TRUE) %>% select(Scores, Flav_path)
+hist(flav_scores_module3$Scores, main = "Distribución de puntaje para HOGS de la ruta de los Flavonoides en 3")
+
+
+scores_2 <- read.csv("../../results/filtered_genes/candidate_hogs/scores_module_3.csv") %>% select(Scores)
+hist(scores_2$Scores, main = "Distribución de Puntajes Módulo 3")
+```
+
+
+### EXTRACCIONES ADICIONALES
+
+Extract refsq IDs of HOGs that entered the differential expression analysis (For background in annot analysis)
+```{r}
+de.novo.table %>% left_join(annot.dataframe, by = c("Row.Labels" = "HOG_ID"), keep = F) %>% dplyr::select("Row.Labels", "Refseq_RNA_ID") %>% write.csv("../../results/networks/big/raw/partial.corr/0.76/anotacion/background_ids/ids.csv")
+```
+
+Extract modules
+```{r}
+for (module in names(table(modules.frame$Module))){
+  print(module)
+  module.frame <- modules.frame[modules.frame$Module == module,] %>% 
+    left_join(annot.dataframe, by = c("HOG_ID" = "HOG_ID"),  keep = F) %>%
+    dplyr::select(Module, HOG_ID, Refseq_RNA_ID, Annot_pathway, Annot_DAVID)
+  write.csv(module.frame , sprintf("../../results/networks/big/raw/partial.corr/0.76/Modules/module_%s.csv", module))
+}
+
+# write.csv(modules.frame %>% left_join(annot.dataframe, by = c("HOG_ID" = "HOG_ID"),  keep = F) %>%
+#     dplyr::select(Module, HOG_ID, Refseq_RNA_ID, Annot_pathway, Annot_DAVID), "../../results/networks/big/raw/partial.corr/0.76/Modules/modules.csv")
+
+write.csv(annot.dataframe, "../../data/potato_denovo/Annotation_HOGs_Potato_de_novo.csv")
+
+```
+

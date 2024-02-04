@@ -81,6 +81,7 @@ for (dir. in list.dirs("../../data/")){
             most.var.HOGS.names, D.E.HOGS, floavonoid.path.HOGS) # --> Enter here as a vector all genes loaded from previous step
           cat("Number of HOGs entering the network is = ", length(table(network.genes)), "\n")
           
+          stop()
           
           if (log_transform){
             message("Obtaining log 2 expression matrix for all genes of interest...")
@@ -304,6 +305,12 @@ network_info <- list()
 
 
 ```{r}
+
+annot.dataframe <- read.delim("../../data/potato_denovo/Annotation_HOGs_Potato_de_novo.txt", sep = "\t")
+annot.colnames <- colnames(annot.dataframe)
+annot.colnames[2] <- "Annot_pathway"
+colnames(annot.dataframe) <- annot.colnames
+
 ## ========================================CREATE NETWORK
 TAO <- 0.76
 
@@ -332,7 +339,7 @@ for(i in 1:n)
   dim(A)
   
   A=graph.adjacency(A,mode="undirected",add.colnames=NULL,diag=FALSE)
-  # plot(A)
+  plot(A)
   
   vertex_colors <- rep("lightblue", 1181)
   vertex_colors[1:924] <- "red"
@@ -631,10 +638,16 @@ for(i in 1:n)
       
       #Eigen centrality
       network_info[["raw"]][["partial.corr"]][[as.character(TAO)]][["eigen_centrality"]] <- eigen_centrality(A, directed=F, weights=NA)
-      # eigc<-eigen_centrality(A, directed=F, weights=NA)
+      
+      
       
       #Betweeness
-      network_info[["raw"]][["partial.corr"]][[as.character(TAO)]][["Betweeness"]] <- betweenness(A, directed = F)
+      network_info[["raw"]][["partial.corr"]][[as.character(TAO)]][["Betweenness"]] <- betweenness(A, directed = F)
+
+      
+      #Transitividad
+      network_info[["raw"]][["partial.corr"]][[as.character(TAO)]][["Transitividad"]] <- transitivity(A, type="local", vids = V(A)) 
+     
       
       #Hub score
       network_info[["raw"]][["partial.corr"]][[as.character(TAO)]][["hub_score"]] <- hub_score(A, weights=NA)$vector
@@ -743,6 +756,57 @@ for (net.size.dir in list.dirs("../../results/networks")){
             cat("Number of HOGS in the final network is ==> ", network_info[["raw"]][["partial.corr"]][[as.character(TAO)]][["Length"]], "\n")
             cat("Number of total HOGS removed  is ==> ", dim(expression.data)[[1]] - network_info[["raw"]][["partial.corr"]][[as.character(TAO)]][["Length"]], "\n\n")
             
+            # Get Eigen centrality
+            eigen.centrality.frame <- data.frame(network_info[["raw"]][["partial.corr"]][[as.character(TAO)]][["eigen_centrality"]]$vector)
+            eigen.ids <- rownames(eigen.centrality.frame)
+            eigen.centrality.frame <- eigen.centrality.frame %>% mutate(HOG_ID = eigen.ids)
+            colnames(eigen.centrality.frame) <-  c("eigen_centrality", "HOG_ID")
+            eigen.centrality.frame <- eigen.centrality.frame %>% arrange(desc(eigen_centrality)) %>%
+              left_join(annot.dataframe, by = c("HOG_ID" = "HOG_ID"), keep = F) %>%
+              left_join(modules.frame, by = c("HOG_ID" = "X"), keep = F) %>% 
+              left_join(degree.frame, by = c("HOG_ID" = "X"), keep = F) %>% dplyr::select(HOG_ID, eigen_centrality, Modules, Degree, Keywords, Annot_DAVID, Annot_pathway, OG, Refseq_RNA_ID, Refseq_Protein) 
+            
+            hist(eigen.centrality.frame$eigen_centrality, main = "Histograma de centralidad eigen")
+            
+            saving.dir <- sprintf("../../results/networks/big/raw/partial.corr/%s/eigen_centrality/", TAO)
+            tryCatch({write.csv(eigen.centrality.frame, paste0(saving.dir, "eigen_centrality.csv"))},
+                 error = function(e) {create.dir(saving.dir)
+                   write.csv(eigen.centrality.frame, paste0(saving.dir, "eigen_centrality.csv"))})
+            
+            # Get Betweenness
+            betweenness.frame <- data.frame(network_info[["raw"]][["partial.corr"]][[as.character(TAO)]][["Betweenness"]])
+            colnames(betweenness.frame) <-  c("Betweenness")
+            betweenness.frame <- betweenness.frame %>% arrange(desc(Betweenness))
+            between.ids <- rownames(betweenness.frame)
+            betweenness.frame <- betweenness.frame %>% mutate(HOG_ID = between.ids)
+            betweenness.frame <- betweenness.frame %>% arrange(desc(Betweenness)) %>%
+              left_join(annot.dataframe, by = c("HOG_ID" = "HOG_ID"), keep = F) %>%
+              left_join(modules.frame, by = c("HOG_ID" = "X"), keep = F) %>% 
+              left_join(degree.frame, by = c("HOG_ID" = "X"), keep = F) %>% dplyr::select(HOG_ID, Betweenness, Modules, Degree, Keywords, Annot_DAVID, Annot_pathway, OG, Refseq_RNA_ID, Refseq_Protein) 
+            
+            hist(betweenness.frame$Betweenness, main = "Histograma de Betweenness")
+            
+            saving.dir <- sprintf("../../results/networks/big/raw/partial.corr/%s/Betweenness/", TAO)
+            tryCatch({write.csv(betweenness.frame, paste0(saving.dir, "Betweenness.csv"))},
+                 error = function(e) {create.dir(saving.dir)
+                   write.csv(betweenness.frame, paste0(saving.dir, "Betweenness.csv"))})
+          
+            # Get Transitivity
+            transitivity.frame <- data.frame(network_info[["raw"]][["partial.corr"]][[as.character(TAO)]][["Transitividad"]]) %>%
+              mutate(X = names(V(A)))
+            colnames(transitivity.frame) <-  c("Transitivity", "HOG_ID")
+            transitivity.frame <- transitivity.frame %>% arrange(desc(Transitivity)) %>%
+              left_join(annot.dataframe, by = c("HOG_ID" = "HOG_ID"), keep = F) %>%
+              left_join(modules.frame, by = c("HOG_ID" = "X"), keep = F) %>% 
+              left_join(degree.frame, by = c("HOG_ID" = "X"), keep = F) %>% dplyr::select(HOG_ID, Transitivity, Modules, Degree, Keywords, Annot_DAVID, Annot_pathway, OG, Refseq_RNA_ID, Refseq_Protein)
+            
+            hist(transitivity.frame$Transitivity, main = "Histograma de transitividad")
+            saving.dir <- sprintf("../../results/networks/big/raw/partial.corr/%s/Transitivity/", TAO)
+            tryCatch({write.csv(transitivity.frame, paste0(saving.dir, "Transitivity.csv"))},
+                 error = function(e) {create.dir(saving.dir)
+                   write.csv(transitivity.frame, paste0(saving.dir, "Transitivity.csv"))})
+            
+            
             # Get N more connected Hogs for instroduced module
             # while(grepl("^[0-9]*$", module.number <- readline("Enter module number"))){
             #   n.central <- readline("Enter number of  HOGs tu return for that module")
@@ -845,4 +909,22 @@ for (net.size.dir in list.dirs("../../results/networks")){
 
 ```
 
+
+Normalizing betweenness values in Betweenness frame for 0.76 network with raw and corr partial
+```{r}
+beetweenness.frame.norm <- read.csv("../../results/networks/big/raw/partial.corr/0.76/Betweenness/Betweenness.csv") %>%
+  mutate(norm_beetweenness = (.$Betweenness - min(.$Betweenness)) / max(.$Betweenness) - min(.$Betweenness))
+write.csv(beetweenness.frame.norm, "../../results/networks/big/raw/partial.corr/0.76/Betweenness/Betweenness_normalized.csv")
+```
+
+Expanding modules frame to include refeq protein
+```{r}
+# modules.frame %>% View() 
+
+for (module in names(table(modules.frame$Module))){
+  print(module)
+  module.frame <- modules.frame[modules.frame$Module == module,]
+  write.csv(module.frame, sprintf("../../results/networks/big/raw/partial.corr/0.76/Modules/module_%s.csv", module))
+}
+```
 
